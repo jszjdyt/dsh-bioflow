@@ -85,7 +85,7 @@
     ok: { label: '成功', tone: 'ok' },
     partial: { label: '部分完成', tone: 'warn' },
     failed: { label: '失败', tone: 'err' },
-    cancelled: { label: '取消', tone: 'muted' },
+    cancelled: { label: '已取消', tone: 'muted' },
     blocked: { label: 'blocked', tone: 'blocked' },
     skipped: { label: '跳过', tone: 'muted' },
     unknown: { label: '未知', tone: 'muted' },
@@ -253,6 +253,11 @@
   }
 
   /** JSON.stringify 之前剔掉 undefined（递归），避免出现 "undefined"。 */
+  /** 中文输入法选词时按 Enter 不应提交（isComposing / 229 都要挡）。 */
+  function isImeComposing(event) {
+    return Boolean(event && (event.isComposing === true || event.keyCode === 229 || event.which === 229))
+  }
+
   function dropUndefined(value) {
     if (Array.isArray(value)) return value.map(dropUndefined)
     if (value && typeof value === 'object') {
@@ -723,6 +728,10 @@
       steps: normalizePlanSteps(plan.steps),
       llmUsed: Boolean(source.llm_used),
       rulesMatched: asArray(source.rules_matched).map(function (item) { return asText(item, '') }).filter(Boolean),
+      limitations: asArray(plan.limitations || source.limitations).map(function (item) { return asText(item, '') }).filter(Boolean),
+      datasetOptions: asArray(source.dataset_options),
+      onlineCandidates: asArray(source.online_candidates),
+      accessionUnregistered: asText(source.accession_unregistered, ''),
       ready: Boolean(planId && confirmToken),
       raw: source,
     }
@@ -1658,6 +1667,15 @@
     '.bf-modal-card{display:flex;flex-direction:column;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 64px);border:1px solid var(--bf-line);border-radius:18px;background:linear-gradient(180deg,#FFFFFF,rgba(246,252,255,.98));box-shadow:0 40px 90px -50px rgba(8,60,96,.7);overflow:hidden}',
     '.bf-modal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--bf-line)}',
     '.bf-modal-body{display:flex;flex-direction:column;gap:8px;padding:12px 14px;overflow-y:auto}',
+    '.bf-starters{margin-bottom:2px}',
+    '.bf-health{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:10px;font-size:11.5px;border:1px solid var(--bf-line);background:rgba(255,255,255,.75)}',
+    '.bf-health-dot{width:9px;height:9px;border-radius:50%;flex:none;background:currentColor;box-shadow:0 0 8px currentColor}',
+    '.bf-health-green{color:var(--bf-ok);border-color:color-mix(in srgb,var(--bf-ok) 40%,var(--bf-line));background:color-mix(in srgb,var(--bf-ok) 7%,#fff)}',
+    '.bf-health-yellow{color:var(--bf-warn);border-color:color-mix(in srgb,var(--bf-warn) 45%,var(--bf-line));background:color-mix(in srgb,var(--bf-warn) 7%,#fff)}',
+    '.bf-health-red{color:var(--bf-err);border-color:color-mix(in srgb,var(--bf-err) 45%,var(--bf-line));background:color-mix(in srgb,var(--bf-err) 6%,#fff)}',
+    '.bf-gate-fixes{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:11px;color:var(--bf-ok)}',
+    '.bf-next{flex:none;display:flex;flex-direction:column;gap:8px;padding:11px 13px;border:1px solid var(--bf-line);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(240,250,255,.9))}',
+    '.bf-next-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.bf-wizard{display:flex;flex-direction:column;gap:10px;padding:14px;min-height:0;overflow-y:auto}',
     '.bf-wizard-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
     '.bf-wizard-steps{display:flex;gap:6px;flex-wrap:wrap}',
@@ -2449,6 +2467,7 @@
       }, [])
       function handleKeyDown(event) {
         if (!event) return
+        if (isImeComposing(event)) return
         var enter = event.key === 'Enter' || event.keyCode === 13
         if (!enter) return
         if (event.shiftKey) return
@@ -2524,8 +2543,20 @@
             }))))
     }
 
+    var FIGURE_PRESETS = [
+      { id: 'proportion', label: '细胞比例箱线图（带 P 值）', need: '我想做细胞比例箱线图（组间比较带显著性），需要单细胞数据、细胞类型列和两组对比；先给候选数据和导入入口' },
+      { id: 'volcano', label: '火山图 + 热图 + GO/KEGG 气泡图', need: '我想做火山图+热图+GO/KEGG 富集气泡图，需要 bulk 表达矩阵和两组分组；先给候选数据和导入入口' },
+      { id: 'forest', label: '多队列森林图（Meta 合并）', need: '我想做多队列森林图（效应合并），需要至少两个可比队列和同一比较方向；先给候选队列' },
+      { id: 'spatial', label: '空间分布 / 细胞共定位图', need: '我想做空间分布或细胞共定位图，需要空间转录组数据（Visium/Stereo-seq）；先给候选数据和导入入口' },
+      { id: 'survival', label: '生存曲线 / 预后森林图', need: '我想做生存曲线或预后森林图，需要带随访（时间+事件）的队列；先给候选数据' },
+      { id: 'umap', label: 'UMAP + Marker 点图', need: '我想做 UMAP 和 Marker 点图，需要单细胞数据并已有细胞类型注释；先给候选或导入入口' },
+    ]
+
     function ChatColumn(props) {
       var messages = props.messages || []
+      var figureState = useState(false)
+      var figureOpen = figureState[0]
+      var setFigureOpen = figureState[1]
       var hasConversation = messages.some(function (message) {
         return message && (message.role === 'user' || message.role === 'agent')
       })
@@ -2540,6 +2571,24 @@
             h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'chat', size: 12 }), '许愿 · 引导'),
             h('span', { className: 'bf-panel-sub' }, '直接打字 · 只出 draft，不会自动跑')),
           h('div', { className: 'bf-panel-body bf-wishdeck-body' },
+            h('div', { className: 'bf-chips bf-starters' },
+              h('span', { className: 'bf-composer-hint' }, '不知道从哪开始？'),
+              h('button', { type: 'button', className: 'bf-chip', onClick: function () { if (props.onNavigate) props.onNavigate('wizard') } }, '我有数据'),
+              h('button', { type: 'button', className: 'bf-chip', onClick: function () { if (props.onNavigate) props.onNavigate('guided') } }, '我只有方向'),
+              h('button', { type: 'button', className: 'bf-chip', onClick: function () { props.onCompose('帮我找公共数据：先给候选队列和中文摘要，说明每个队列能回答什么、缺什么，再让我挑') } }, '帮我找数据'),
+              h('button', { type: 'button', className: 'bf-chip', onClick: function () { setFigureOpen(true) } }, '照着图来')),
+            figureOpen ? h('div', { className: 'bf-modal', role: 'dialog', 'aria-label': '照着图来' },
+              h('div', { className: 'bf-modal-card' },
+                h('div', { className: 'bf-modal-head' },
+                  h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'image', size: 13 }), '照着图来：你想要哪张图？'),
+                  h('div', { className: 'bf-spacer' }),
+                  h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: function () { setFigureOpen(false) } }, h(Icon, { name: 'close', size: 11 }), '关闭')),
+                h('div', { className: 'bf-modal-body' }, FIGURE_PRESETS.map(function (preset) {
+                  return h('button', {
+                    key: preset.id, type: 'button', className: 'bf-example',
+                    onClick: function () { props.onCompose(preset.need); setFigureOpen(false) },
+                  }, preset.label)
+                })))) : null,
             hasConversation ? null : h('div', { className: 'bf-feed-examples' },
               h('div', { className: 'bf-composer-hint' }, '不知道怎么说？点一个例子，或直接用下面的常用套路：'),
               WISH_EXAMPLES.slice(0, 3).map(function (example) {
@@ -2817,6 +2866,16 @@
       var blocked = asArray(props.submitBlocked)
       var submitError = props.submitError
       var ready = Boolean(draft.planId && draft.confirmToken)
+      var missingFields = asArray(draft.missing)
+      var hardMissing = missingFields.some(function (field) { return field === 'dataset' || field === 'contrast' || field === 'template' })
+      var healthLevel = blocked.length || hardMissing ? 'red' : (missingCount ? 'yellow' : 'green')
+      var healthText = healthLevel === 'red'
+        ? '红灯：还差关键条件，先补齐再提交'
+        : healthLevel === 'yellow'
+          ? '黄灯：可以跑，但还有字段建议确认'
+          : '绿灯：条件齐备，可以确认运行'
+      var firstQuestion = asArray(draft.questions)[0] || null
+      var firstCandidates = firstQuestion ? asArray(firstQuestion.candidates).slice(0, 4) : []
 
       return h('div', { className: 'bf-card' + (submittedRunId ? ' bf-card-muted' : '') },
         h('div', { className: 'bf-card-head' },
@@ -2837,12 +2896,32 @@
           draft.warnings.slice(0, 6).map(function (warning, index) {
             return h('div', { key: index }, '· ' + warning)
           })) : null,
+        h('div', { className: 'bf-health bf-health-' + healthLevel },
+          h('span', { className: 'bf-health-dot' }),
+          h('span', null, healthText),
+          h('div', { className: 'bf-spacer' }),
+          missingFields.length ? h('span', { className: 'bf-muted' }, '待定：' + missingFields.join('、')) : null),
+        firstQuestion && firstCandidates.length ? h('div', { className: 'bf-warnbox' },
+          h('div', { className: 'bf-row bf-row-tight' }, h(Icon, { name: 'chat', size: 12 }), h('b', null, '下一步只问一件事')),
+          h('div', null, firstQuestion.question || ('请确认 ' + firstQuestion.field)),
+          h('div', { className: 'bf-chips' }, firstCandidates.map(function (candidate, index) {
+            return h('button', {
+              key: index, type: 'button', className: 'bf-chip',
+              onClick: function () { props.onEdit(firstQuestion.field, candidate.value) },
+            }, asText(candidate.label, candidate.value))
+          }))) : null,
+        asArray(draft.limitations).length ? h('div', { className: 'bf-warnbox' },
+          h('div', { className: 'bf-row bf-row-tight' }, h(Icon, { name: 'info', size: 12 }), h('b', null, '这次能回答什么 / 不能回答什么')),
+          asArray(draft.limitations).map(function (item, index) { return h('div', { key: index }, '· ' + item) })) : null,
         blocked.length ? h('div', { className: 'bf-warnbox' },
           h('div', { className: 'bf-row bf-row-tight' }, h(Icon, { name: 'shield', size: 12 }), h('b', null, '被闸门拦下，不能提交')),
           blocked.map(function (gate, index) {
             return h('div', { key: index, className: 'bf-gate' },
               h('div', { className: 'bf-gate-id' }, asText(gate.id, 'gate') + ' · ' + asText(gate.title, '')),
-              h('div', { className: 'bf-gate-detail' }, asText(gate.detail, '缺前置条件/参数')))
+              h('div', { className: 'bf-gate-detail' }, asText(gate.detail, '缺前置条件/参数')),
+              asArray(gate.fixes).length ? h('div', { className: 'bf-gate-fixes' }, asArray(gate.fixes).map(function (fix, fixIndex) {
+                return h('span', { key: fixIndex }, '→ ' + asText(fix, ''))
+              })) : null)
           })) : null,
         submitError ? h(ErrorBar, { error: submitError, title: '提交失败', onRetry: props.onRetrySubmit }) : null,
 
@@ -3069,7 +3148,7 @@
               : null,
             active
               ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-danger', onClick: props.onCancel },
-                h(Icon, { name: 'stop', size: 11 }), '取消')
+                h(Icon, { name: 'stop', size: 11 }), '停止等待')
               : null)),
 
         h('div', { className: 'bf-panel-body' },
@@ -3213,6 +3292,7 @@
               'aria-label': '检索词',
               onChange: function (event) { props.onQuery(tab, event.target.value) },
               onKeyDown: function (event) {
+                if (isImeComposing(event)) return
                 if (event && (event.key === 'Enter' || event.keyCode === 13)) {
                   event.preventDefault()
                   props.onSearch(tab)
@@ -3328,8 +3408,8 @@
                     ? h('button', {
                       type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost',
                       onClick: function () { props.onCancel(row) },
-                      title: '取消（客户端停止等待；后端 download 是一次性请求，不支持暂停续传）',
-                    }, h(Icon, { name: 'close', size: 10 }), '取消')
+                      title: '停止等待（客户端停止等待；后端 download 是一次性请求，不支持暂停续传）',
+                    }, h(Icon, { name: 'close', size: 10 }), '停止等待')
                     : h('button', {
                       type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost',
                       onClick: function () { props.onRemove(row) }, title: '从队列移除（不动磁盘文件）',
@@ -4294,7 +4374,7 @@
                 className: 'bf-input bf-input-sm', style: { flex: '1 1 220px' },
                 value: online.term, placeholder: '检索词，默认用上面的疾病（如 gastric cancer liver metastasis）',
                 onChange: function (event) { setOnline(function (previous) { return Object.assign({}, previous, { term: event.target.value }) }) },
-                onKeyDown: function (event) { if (event.key === 'Enter') searchOnline() },
+                onKeyDown: function (event) { if (isImeComposing(event)) return; if (event.key === 'Enter') searchOnline() },
               }),
               h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: online.loading, onClick: searchOnline },
                 h(Icon, { name: 'search', size: 11 }), online.loading ? '检索中…' : '搜在线数据')),
@@ -4620,7 +4700,7 @@
               className: 'bf-input bf-input-sm', style: { flex: '1 1 260px' }, value: need,
               placeholder: '如 胃癌肝转移 NK 细胞 单细胞 预后',
               onChange: function (event) { setNeed(event.target.value) },
-              onKeyDown: function (event) { if (event.key === 'Enter') advise() },
+              onKeyDown: function (event) { if (isImeComposing(event)) return; if (event.key === 'Enter') advise() },
             }),
             h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: run.loading, onClick: advise },
               h(Icon, { name: 'search', size: 11 }), run.loading ? '正在挑…' : '让 AI 挑数据')),
@@ -4933,7 +5013,7 @@
               className: 'bf-input bf-input-sm', style: { flex: '1 1 320px' }, value: need,
               placeholder: '说一句你要解决的问题，AI 会去找候选数据集',
               onChange: function (event) { setNeed(event.target.value) },
-              onKeyDown: function (event) { if (event.key === 'Enter') runAdvise() },
+              onKeyDown: function (event) { if (isImeComposing(event)) return; if (event.key === 'Enter') runAdvise() },
             }),
             h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: advise.loading, onClick: runAdvise },
               h(Icon, { name: 'search', size: 11 }), advise.loading ? '正在挑…' : '让 AI 找候选')),
@@ -5344,6 +5424,9 @@
         } catch (error) { /* ignore */ }
       }
 
+      var nextWishState = useState({ runId: '', loading: false, directions: [], zero: false })
+      var nextWish = nextWishState[0]
+      var setNextWish = nextWishState[1]
       var pickerState = useState({ open: false, options: [], auto: false })
       var picker = pickerState[0]
       var setPicker = pickerState[1]
@@ -5406,6 +5489,20 @@
           return null
         })
       }
+
+      React.useEffect(function () {
+        var run = selectedRunView
+        var runId = run && run.runId ? run.runId : ''
+        if (!runId || !api) return
+        if (!['succeeded', 'partial'].includes(String(run.status || ''))) return
+        if (nextWish.runId === runId || nextWish.loading) return
+        setNextWish(function (previous) { return Object.assign({}, previous, { runId: runId, loading: true }) })
+        api.dispatch({ action: 'suggest_next', run_id: runId }).then(function (data) {
+          setNextWish({ runId: runId, loading: false, directions: asArray(data && data.directions), zero: Boolean(data && data.zero_significant) })
+        }).catch(function () {
+          setNextWish({ runId: runId, loading: false, directions: [], zero: false })
+        })
+      }, [selectedRunView && selectedRunView.runId, selectedRunView && selectedRunView.status])
 
       React.useEffect(function () {
         api.dispatch({ action: 'settings' }).then(function (data) {
@@ -6147,6 +6244,7 @@
           h(ChatColumn, {
             messages: messages, text: askText, onTextChange: setAskText, onSend: handleSend, asking: asking,
             onCompose: function (composed) { setAskText(composed) },
+            onNavigate: gotoPage,
             draftLabel: draft ? (draft.missing.length ? draft.missing.length + ' 个字段待补' : 'draft 就绪') : '先出 draft，不会自动跑',
             runs: runs.list, runsLoading: runs.loading, runsError: runs.error,
             selectedRunId: selectedRunId,
@@ -6210,6 +6308,16 @@
               onCopy: handleCopy,
               onExpand: function () { if (selectedRunId) ensureManifest(selectedRunId, false) },
             }),
+            nextWish.directions.length ? h('div', { className: 'bf-next' },
+              h('div', { className: 'bf-next-head' },
+                h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'flow', size: 12 }), '顺着这次结果，继续许愿'),
+                nextWish.zero ? h('span', { className: 'bf-muted' }, '当前阈值下无显著项；完整结果仍可导出') : null),
+              h('div', { className: 'bf-chips' }, nextWish.directions.map(function (item) {
+                return h('button', {
+                  key: item.id, type: 'button', className: 'bf-chip',
+                  onClick: function () { setAskText(asText(item.need, '')) },
+                }, asText(item.label, ''))
+              }))) : null,
             h(WorkspaceTabs, {
               api: api,
               onRefreshRuns: loadRuns,
