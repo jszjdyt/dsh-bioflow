@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "title": "许愿式生物信息全自动分析平台",
+    "description": "一句话许愿 → 冻结计划 → 不可变 run → 证据包：统一调度单细胞 / bulk / 绘图 / 虚拟细胞 / 空间 / 代谢六个工作台，五源检索、统一下载、多数据归一化与联合分析，交付可回查的 manifest/design/qc/results/figures/evidence/methods。",
+    "detail": "docs/DETAIL.md"
+  },
+  "nav": "许愿式生物信息全自动分析平台",
+  "title": "许愿式生物信息全自动分析平台",
+  "subtitle": "许愿 · 冻结计划 · 不可变 run · 证据包",
+  "wish_placeholder": "说人话就行，比如「拿 GSE84433 的胃癌肝转移，按 NK 比例和原发比一下，出图」",
+  "plan": "计划",
+  "pipeline": "流水线",
+  "sources": "数据源",
+  "downloads": "下载与队列",
+  "artifacts": "产物",
+  "evidence": "证据",
+  "model_prediction": "模型预测（非实验结论）",
+  "blocked": "被闸门拦下",
+  "failed": "失败",
+  "confirm_submit": "确认并提交",
+  "ask_again": "让 agent 再想想",
+  "empty_plan": "还没有计划：在左下说一句需求，会得到一张可改字段、待确认的 draft 计划卡",
+  "empty_pipeline": "还没有流水线：确认计划并提交后，每个步骤会在这里逐个推进",
+  "empty_sources": "还没有检索结果：搜 GSE 号、TCGA 项目号、MTBLS 编号或关键词",
+  "empty_downloads": "还没有下载任务：在检索结果里勾选记录后加入下载",
+  "empty_artifacts": "还没有产物：run 成功后会生成 manifest / design / qc / results / figures / evidence / methods",
+  "empty_evidence": "还没有证据条目：成功 run 的每条 claim 都绑定 run_id / table_id / row_id",
+  "health_ok": "可用",
+  "health_slow": "较慢",
+  "health_down": "失败",
+  "entry": "许愿式生物信息全自动分析平台"
+}

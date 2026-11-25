@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="许愿式生物信息全自动分析平台">
+  <defs>
+    <linearGradient id="bf-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2FAFF"/>
+      <stop offset="1" stop-color="#D8EFFC"/>
+    </linearGradient>
+    <linearGradient id="bf-flow" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0EA5E9"/>
+      <stop offset="0.55" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#7DD3FC"/>
+    </linearGradient>
+    <linearGradient id="bf-rail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#7DD3FC"/>
+    </linearGradient>
+    <clipPath id="bf-clip">
+      <rect x="2" y="2" width="44" height="44" rx="11"/>
+    </clipPath>
+  </defs>
+
+  <rect x="2" y="2" width="44" height="44" rx="11" fill="url(#bf-bg)" stroke="#0EA5E9" stroke-opacity="0.55" stroke-width="1"/>
+
+  <g clip-path="url(#bf-clip)" stroke="#7DD3FC" stroke-opacity="0.38" stroke-width="0.5">
+    <path d="M10 2V46 M18 2V46 M26 2V46 M34 2V46 M42 2V46"/>
+    <path d="M2 10H46 M2 18H46 M2 26H46 M2 34H46 M2 42H46"/>
+  </g>
+
+  <path d="M11 34C16.5 34 16.5 14 24 14C31.5 14 31.5 34 37 34" fill="none" stroke="url(#bf-flow)" stroke-width="3" stroke-linecap="round"/>
+
+  <path d="M11 40H37" fill="none" stroke="url(#bf-rail)" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.85"/>
+  <g fill="#0EA5E9" fill-opacity="0.8">
+    <rect x="15.2" y="38.4" width="3.2" height="3.2" rx="0.8"/>
+    <rect x="22.4" y="38.4" width="3.2" height="3.2" rx="0.8"/>
+    <rect x="29.6" y="38.4" width="3.2" height="3.2" rx="0.8"/>
+  </g>
+
+  <circle cx="11" cy="34" r="2.6" fill="#F2FAFF" stroke="#0EA5E9" stroke-width="1.3"/>
+  <circle cx="37" cy="34" r="2.6" fill="#0EA5E9" stroke="#7DD3FC" stroke-width="1.2"/>
+  <circle cx="24" cy="14" r="3" fill="#0EA5E9"/>
+  <circle cx="24" cy="14" r="1.2" fill="#F2FAFF"/>
+
+  <path d="M24 5.6l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z" fill="#38BDF8"/>
+</svg>

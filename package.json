@@ -1,0 +1,61 @@
+{
+  "name": "dsh-bioflow",
+  "version": "0.1.0",
+  "description": "许愿式生物信息全自动分析平台（DSH Host 插件 dsh-bioflow）：自然语言许愿式分析、GEO/PubMed/GDC-TCGA/MetaboLights/CELLxGENE 检索、统一下载、多数据归一化与联合分析、按 run_id 不可变的交付物（manifest/design/results/figures/evidence/methods）。",
+  "license": "MIT",
+  "author": "jszjdyt",
+  "icon": "icon.svg",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "bioflow": "./bin/bioflow.mjs"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "bin/*.mjs",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "lib/*.mjs",
+    "docs/",
+    "README.md",
+    "INSTALL.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "bioinformatics",
+    "bioflow",
+    "geo",
+    "pubmed",
+    "gdc",
+    "metabolights",
+    "cellxgene",
+    "pipeline"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "displayName": "许愿式生物信息全自动分析平台"
+}

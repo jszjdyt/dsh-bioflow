@@ -1,0 +1,7 @@
+# dsh-bioflow bundle patch
+# 一个 Host 插件：/bioflow HTTP 路由 + bioflow agent 工具 + prompt section。
+# id 与 name 必须等于包名 dsh-bioflow。
+- insert:
+    - id: dsh-bioflow
+      name: 'dsh-bioflow'
+      config: {}

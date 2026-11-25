@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "title": "Wishful Autonomous Bioinformatics Platform",
+    "description": "One sentence in, frozen plan, immutable run, evidence package: one gateway over the single-cell, bulk, plotting, virtual-cell, spatial and metabolomics workbenches, with five-source search, unified downloads, harmonization and joint analysis, delivering traceable manifest/design/qc/results/figures/evidence/methods.",
+    "detail": "docs/DETAIL.md"
+  },
+  "nav": "Wishful Bioinformatics Platform",
+  "title": "Wishful Autonomous Bioinformatics Platform",
+  "subtitle": "Wish · frozen plan · immutable run · evidence package",
+  "wish_placeholder": "Plain words are fine, e.g. \"take the gastric cancer liver metastases in GSE84433, compare NK proportions against primary, and plot it\"",
+  "plan": "Plan",
+  "pipeline": "Pipeline",
+  "sources": "Sources",
+  "downloads": "Downloads",
+  "artifacts": "Artifacts",
+  "evidence": "Evidence",
+  "model_prediction": "Model prediction (not experimental evidence)",
+  "blocked": "Blocked by a gate",
+  "failed": "Failed",
+  "confirm_submit": "Confirm and submit",
+  "ask_again": "Ask the agent to rethink",
+  "empty_plan": "No plan yet: describe what you need at the lower left and you will get an editable draft plan card",
+  "empty_pipeline": "No pipeline yet: once a plan is confirmed and submitted, each step appears here as it runs",
+  "empty_sources": "No search results yet: search a GSE, TCGA project, MTBLS accession or keywords",
+  "empty_downloads": "No downloads yet: select records in the search results and add them to downloads",
+  "empty_artifacts": "No artifacts yet: a successful run produces manifest / design / qc / results / figures / evidence / methods",
+  "empty_evidence": "No evidence records yet: every claim of a successful run binds run_id / table_id / row_id",
+  "health_ok": "Available",
+  "health_slow": "Slow",
+  "health_down": "Down",
+  "entry": "Wishful Bioinformatics Platform"
+}
