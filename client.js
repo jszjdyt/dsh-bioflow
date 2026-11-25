@@ -4188,9 +4188,9 @@
 
       function buildWish(mergedId) {
         var base = form.disease ? '针对' + form.disease + '，' : ''
-        var primary = primaryId ? '主队列用数据集 ' + primaryId : '用我已登记的数据'
+        var primary = primaryId ? '以数据集 ' + primaryId : '用我已登记的数据'
         var design = '按 ' + (form.caseGroup || 'tumor') + ' vs ' + (form.controlGroup || 'normal') + ' 比较'
-        var parts = [base + primary + '（' + guidedKindLabel(primaryKind) + '），' + design + '，模板 ' + templateForPrimary()]
+        var parts = [base + primary + '（' + guidedKindLabel(primaryKind) + '）为基准，' + design + '，模板 ' + templateForPrimary()]
         if (mergedId) {
           parts.push('其中同类型队列 ' + sameKindIds.join('、') + ' 已先 harmonize（method=' + method + '）去批次合并成数据集 ' + mergedId + '，请直接在这个合并数据集上继续分析')
         } else if (needsHarmonize) {
@@ -4239,7 +4239,7 @@
           h('div', { className: 'bf-clinical-hit-title' },
             h('span', { className: 'bf-mono' }, item.id),
             h('span', { className: 'bf-muted' }, ' · ' + item.kindLabel + ' · n=' + asText(item.n, '?') + (item.groups.length ? ' · 分组 ' + item.groups.join('/') : '')),
-            h('span', { className: 'bf-badge ' + (item.sameKind ? 'bf-badge-warn' : 'bf-badge-run') }, item.isPrimary ? '主队列' : item.sameKind ? '同类型：需去批次' : '不同类型：一脉相承')),
+            h('span', { className: 'bf-badge ' + (item.sameKind ? 'bf-badge-warn' : 'bf-badge-run') }, item.isPrimary ? '基准' : item.sameKind ? '同类型：需去批次' : '不同类型：一脉相承')),
           !item.isPrimary ? h('div', { className: 'bf-joint-actions' },
             h('span', { className: 'bf-composer-hint' }, item.sameKind
               ? '同类型多队列直接合并会引入批次效应，必须先 harmonize 去批次'
@@ -4271,11 +4271,11 @@
               DISEASE_PRESETS.map(function (preset) {
                 return h('button', { key: preset.id, type: 'button', className: 'bf-chip', onClick: function () { pickPreset(preset) } }, preset.disease)
               })),
-            h('label', { className: 'bf-tpl-field' }, '主队列（已登记数据集）',
+            h('label', { className: 'bf-tpl-field' }, '数据（本地已登记；一个都没有就用下面的在线检索）',
               datasets.loading ? h('div', { className: 'bf-muted' }, '正在加载数据集…')
                 : datasets.list.length
                   ? h('select', { className: 'bf-select bf-input-sm', value: primaryId, onChange: function (event) { setPrimaryId(event.target.value); setAddedIds([]) } }, datasetRows)
-                  : h('div', { className: 'bf-muted' }, '还没有已登记数据集：先去「数据向导」或「AI 挑数据」下载登记，再回来。')),
+                  : h('div', { className: 'bf-muted' }, '本地还没有已登记数据——直接用下面「搜在线数据（GEO / TCGA / MetaboLights）」，选中会自动下载并登记。')),
             h('label', { className: 'bf-tpl-field' }, '＋ 从本地已登记里追加（在线数据用下面一栏）',
               h('div', { className: 'bf-row' },
                 h('select', {
@@ -4314,14 +4314,14 @@
                       type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary',
                       disabled: info.stage === 'downloading' || info.stage === 'registering',
                       onClick: function () { acquireOnline(item, true) },
-                    }, h(Icon, { name: 'download', size: 11 }), info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '设为主队列（下载+登记）'),
+                    }, h(Icon, { name: 'download', size: 11 }), info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '设为基准数据（下载+登记）'),
                   info.stage === 'done'
-                    ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { addDataset(info.datasetId) } }, '追加为联合队列')
+                    ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { addDataset(info.datasetId) } }, '加为追加数据')
                     : h('button', {
                       type: 'button', className: 'bf-btn bf-btn-sm',
                       disabled: info.stage === 'downloading' || info.stage === 'registering',
                       onClick: function () { acquireOnline(item, false) },
-                    }, info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '追加为联合队列（下载+登记）'),
+                    }, info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '追加数据（下载+登记）'),
                   info.error ? h('span', { className: 'bf-tone-err' }, info.error) : null))
             })) : null,
             h('div', { className: 'bf-tpl-grid' },
@@ -4339,7 +4339,7 @@
               '检测到 ' + sameKindIds.length + ' 个同类型队列（' + sameKindIds.join('、') + '）：直接合并会引入批次效应，必须先 harmonize 去批次再合并/联合。') : null),
           h('section', { className: 'bf-logic-card' },
             h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '02'), h('span', { className: 'bf-logic-card-title' }, '已选数据与处理方式')),
-            h('div', { className: 'bf-joint-list' }, entriesView.length ? entriesView : h('div', { className: 'bf-muted' }, '先在左边选主队列，再用「＋ 追加数据」加其他队列。')),
+            h('div', { className: 'bf-joint-list' }, entriesView.length ? entriesView : h('div', { className: 'bf-muted' }, '先在上面选一个本地数据，或直接搜在线数据；再用「＋ 追加」加其他队列。')),
             status ? h('div', { className: 'bf-logic-status' }, status) : null,
             error ? h('div', { className: 'bf-inline-error' }, '失败：' + asText(error.message || error.error || error, '未知错误')) : null,
             h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '03'), h('span', { className: 'bf-logic-card-title' }, '将生成的计划许愿')),
@@ -5019,7 +5019,7 @@
                           asArray(currentConfig.groups).map(function (group) { return h('option', { key: group, value: group }, group) }))),
                       h('label', { className: 'bf-tpl-field' }, '角色',
                         h('select', { className: 'bf-select bf-input-sm', value: currentConfig.role, onChange: function (event) { patchConfig(current, { role: event.target.value }) } },
-                          h('option', { value: 'primary' }, '主队列'),
+                          h('option', { value: 'primary' }, '基准'),
                           h('option', { value: 'supplementary' }, '补充队列'))),
                       h('label', { className: 'bf-tpl-field' }, '是否纳入',
                         h('select', { className: 'bf-select bf-input-sm', value: currentConfig.include ? 'yes' : 'no', onChange: function (event) { patchConfig(current, { include: event.target.value === 'yes' }) } },
