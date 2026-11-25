@@ -4066,8 +4066,8 @@
 
     /** 不同类型 = 一脉相承的下一步（不是拼在一起做推断）。 */
     function chainHintFor(kind, primaryKind) {
-      if (kind === 'scrna') return '把主队列的差异结果/签名映射到单细胞队列（joint mode=signature，产物标 model_prediction）'
-      if (kind === 'spatial') return '用空间队列做空间域/反卷积，与主队列结果互相印证（不做跨模态合并推断）'
+      if (kind === 'scrna') return '把基准数据的差异结果/签名映射到单细胞队列（joint mode=signature，产物标 model_prediction）'
+      if (kind === 'spatial') return '用空间队列做空间域/反卷积，与基准数据结果互相印证（不做跨模态合并推断）'
       if (kind === 'metabolomics') return '代谢组做通路层面的正交验证，不与 bulk 直接合并来做差异'
       if (kind === 'bulk' && primaryKind !== 'bulk') return 'bulk 作为独立验证队列：分别分析，再用 joint meta 合并效应'
       return '作为独立的验证队列，分别分析后按需 joint meta 合并'
