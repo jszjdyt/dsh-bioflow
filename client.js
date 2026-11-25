@@ -1654,6 +1654,18 @@
     '.bf-logic-input:focus{border-color:var(--bf-line-glow);box-shadow:var(--bf-glow)}',
     '.bf-logic-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.bf-clinical-grid{display:grid;grid-template-columns:minmax(0,0.95fr) minmax(0,1.05fr);gap:12px}',
+    '.bf-modal{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,#071A29 42%,transparent);backdrop-filter:blur(6px);padding:24px}',
+    '.bf-modal-card{display:flex;flex-direction:column;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 64px);border:1px solid var(--bf-line);border-radius:18px;background:linear-gradient(180deg,#FFFFFF,rgba(246,252,255,.98));box-shadow:0 40px 90px -50px rgba(8,60,96,.7);overflow:hidden}',
+    '.bf-modal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--bf-line)}',
+    '.bf-modal-body{display:flex;flex-direction:column;gap:8px;padding:12px 14px;overflow-y:auto}',
+    '.bf-wizard{display:flex;flex-direction:column;gap:10px;padding:14px;min-height:0;overflow-y:auto}',
+    '.bf-wizard-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
+    '.bf-wizard-steps{display:flex;gap:6px;flex-wrap:wrap}',
+    '.bf-wizard-body{display:flex;flex-direction:column;gap:12px}',
+    '.bf-wizard-split{display:grid;grid-template-columns:240px minmax(0,1fr);gap:12px;min-height:320px}',
+    '.bf-wizard-side{display:flex;flex-direction:column;gap:5px;max-height:520px;overflow-y:auto}',
+    '.bf-wizard-main{min-width:0;display:flex;flex-direction:column;gap:10px}',
+    '.bf-wizard-picked{border-color:var(--bf-line-glow);box-shadow:0 0 0 3px color-mix(in srgb,var(--bf-accent-3) 16%,transparent)}',
     '.bf-chip-on{border-color:var(--bf-line-glow);background:color-mix(in srgb,var(--bf-accent-3) 18%,#FFFFFF);box-shadow:0 0 0 3px color-mix(in srgb,var(--bf-accent-3) 16%,transparent)}',
     '.bf-logic-preview{padding:11px 13px;border:1px dashed var(--bf-line);border-radius:12px;background:rgba(255,255,255,.75);font-size:12.5px;line-height:1.6;color:var(--bf-ink-1)}',
     '.bf-clinical-hit{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid var(--bf-line);border-radius:10px;background:#FFFFFF}',
@@ -3913,6 +3925,7 @@
         { id: 'sources', label: '数据源检索' },
         { id: 'downloads', label: '下载队列' },
         { id: 'joint', label: '联合分析' },
+        { id: 'advisor', label: 'AI 挑数据' },
       ]
       return h('div', { className: 'bf-stack' },
         h('div', { className: 'bf-tabbar', role: 'tablist' }, tabs.map(function (item) {
@@ -3928,8 +3941,10 @@
           : tab === 'sources'
             ? h(SourceSearch, props.sources)
             : tab === 'joint'
-              ? h(JointPanel, { api: props.api, onRefreshRuns: props.onRefreshRuns })
-              : h(DownloadQueue, props.downloads))
+              ? h(JointPanel, { api: props.api, onRefreshRuns: props.onRefreshRuns, onCompose: props.onCompose, onBackToWish: props.onBackToWish })
+              : tab === 'advisor'
+                ? h(AdvisorPanel, { api: props.api, onCompose: props.onCompose, onBackToWish: props.onBackToWish })
+                : h(DownloadQueue, props.downloads))
     }
 
     // ----------------------------------------------------------------------
@@ -4045,60 +4060,297 @@
       { id: 'brca', disease: '乳腺癌', hint: 'BRCA', data: 'bulk', goal: 'de' },
     ]
 
+    var KIND_LABELS = { bulk: 'bulk 转录组', scrna: '单细胞', spatial: '空间转录组', metabolomics: '代谢组', matrix: '矩阵', unknown: '未知' }
+
+    function guidedKindLabel(kind) { return KIND_LABELS[kind] || KIND_LABELS.unknown }
+
+    /** 不同类型 = 一脉相承的下一步（不是拼在一起做推断）。 */
+    function chainHintFor(kind, primaryKind) {
+      if (kind === 'scrna') return '把主队列的差异结果/签名映射到单细胞队列（joint mode=signature，产物标 model_prediction）'
+      if (kind === 'spatial') return '用空间队列做空间域/反卷积，与主队列结果互相印证（不做跨模态合并推断）'
+      if (kind === 'metabolomics') return '代谢组做通路层面的正交验证，不与 bulk 直接合并来做差异'
+      if (kind === 'bulk' && primaryKind !== 'bulk') return 'bulk 作为独立验证队列：分别分析，再用 joint meta 合并效应'
+      return '作为独立的验证队列，分别分析后按需 joint meta 合并'
+    }
+
     function GuidedPage(props) {
-      var formState = useState({ disease: '', data: 'bulk', goal: 'de', caseGroup: 'tumor', controlGroup: 'normal', place: '' })
+      var api = props.api
+      var formState = useState({ disease: '', goal: 'de', caseGroup: 'tumor', controlGroup: 'normal', place: '' })
       var form = formState[0]
       var setForm = formState[1]
+      var datasetsState = useState({ loading: true, error: null, list: [] })
+      var datasets = datasetsState[0]
+      var setDatasets = datasetsState[1]
+      var primaryState = useState('')
+      var primaryId = primaryState[0]
+      var setPrimaryId = primaryState[1]
+      var addedState = useState([])
+      var addedIds = addedState[0]
+      var setAddedIds = addedState[1]
+      var methodState = useState('quantile')
+      var method = methodState[0]
+      var setMethod = methodState[1]
+      var busyState = useState('')
+      var busy = busyState[0]
+      var setBusy = busyState[1]
+      var statusState = useState('')
+      var status = statusState[0]
+      var setStatus = statusState[1]
+      var errorState = useState(null)
+      var error = errorState[0]
+      var setError = errorState[1]
+      var onlineState = useState({ loading: false, error: null, data: null, term: '' })
+      var online = onlineState[0]
+      var setOnline = onlineState[1]
+      var onlineStatusState = useState({})
+      var onlineStatus = onlineStatusState[0]
+      var setOnlineStatus = onlineStatusState[1]
+
+      React.useEffect(function () {
+        if (!api) return
+        api.dispatch({ action: 'datasets', limit: 100 }).then(function (data) {
+          var list = asArray(data && data.datasets)
+          setDatasets({ loading: false, error: null, list: list })
+          setPrimaryId(function (previous) { return previous || (list[0] ? list[0].dataset_id : '') })
+        }).catch(function (problem) { setDatasets({ loading: false, error: problem, list: [] }) })
+      }, [])
+
       function patch(key, value) { setForm(function (previous) { return Object.assign({}, previous, { [key]: value }) }) }
       function pickPreset(preset) {
-        setForm(function (previous) {
-          return Object.assign({}, previous, { disease: preset.disease, data: preset.data, goal: preset.goal })
+        setForm(function (previous) { return Object.assign({}, previous, { disease: preset.disease, goal: preset.goal }) })
+      }
+      function byId(id) { return (datasets.list || []).find(function (row) { return row.dataset_id === id }) || null }
+      function kindOf(id) { var row = byId(id); return (row && row.data_kind) || 'unknown' }
+      function nOf(id) { var row = byId(id); return row ? row.n_samples : null }
+      function groupsOf(id) { var row = byId(id); return asArray(row && row.groups) }
+      function addDataset(id) {
+        if (!id || id === primaryId || addedIds.indexOf(id) >= 0) return
+        setAddedIds(function (previous) { return previous.concat([id]) })
+      }
+      function removeDataset(id) {
+        setAddedIds(function (previous) { return previous.filter(function (item) { return item !== id }) })
+      }
+      function searchOnline() {
+        if (!api) return
+        var term = asText(online.term, '').trim() || asText(form.disease, '').trim() || asText(form.term, '').trim()
+        if (!term) { setOnline(function (previous) { return Object.assign({}, previous, { error: { message: '先填疾病或检索词' } }) }); return }
+        setOnline(function (previous) { return Object.assign({}, previous, { loading: true, error: null, data: null }) })
+        api.dispatch({ action: 'advise', need: term, sources: ['geo', 'gdc', 'metabolights'], limit: 8 })
+          .then(function (data) { setOnline({ loading: false, error: null, data: data, term: term }) })
+          .catch(function (problem) { setOnline(function (previous) { return Object.assign({}, previous, { loading: false, error: problem }) }) })
+      }
+      function acquireOnline(item, asPrimary) {
+        var key = asText(item.source, 'geo') + ':' + asText(item.dataset_id, '')
+        if (!api || !key) return
+        setOnlineStatus(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'downloading' } }) })
+        setStatus('正在下载 ' + asText(item.dataset_id, '') + ' …')
+        api.dispatch({ action: 'download', source: item.source || 'geo', id: item.dataset_id }).then(function (download) {
+          var artifacts = asArray(download && download.artifact_ids)
+          if (!artifacts.length && download && download.artifacts) artifacts = asArray(download.artifacts).map(function (entry) { return entry.artifact_id || entry.id })
+          if (!artifacts.length) throw { message: '下载没有返回 artifact_id' }
+          setOnlineStatus(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'registering' } }) })
+          setStatus('下载完成，登记中（自动探测矩阵方向/尺度）…')
+          return api.dispatch({ action: 'register', artifact_ids: artifacts, name: item.dataset_id, assay: 'auto' })
+        }).then(function (result) {
+          var dataset = result && result.dataset
+          if (!dataset) throw { message: (result && result.summary) || '登记失败' }
+          setOnlineStatus(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'done', datasetId: dataset.dataset_id } }) })
+          setStatus('已登记 ' + dataset.dataset_id + '：' + asText(result.summary, ''))
+          if (asPrimary) setPrimaryId(dataset.dataset_id)
+          else addDataset(dataset.dataset_id)
+          api.dispatch({ action: 'datasets', limit: 100 }).then(function (data2) {
+            var list = asArray(data2 && data2.datasets)
+            setDatasets({ loading: false, error: null, list: list })
+          }).catch(function () { /* ignore */ })
+        }).catch(function (problem) {
+          setOnlineStatus(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'error', error: asText(problem && (problem.message || problem.error), '失败') } }) })
+          setStatus('失败：' + asText(problem && (problem.message || problem.error), '未知错误'))
         })
       }
-      var composed = composeWish({ disease: form.disease, kind: form.data, goal: form.goal, caseGroup: form.caseGroup, controlGroup: form.controlGroup, dataset: form.place })
-      function useWish() {
-        if (props.onCompose) props.onCompose(composed)
+      var availableToAdd = (datasets.list || []).filter(function (row) {
+        return row.dataset_id !== primaryId && addedIds.indexOf(row.dataset_id) < 0
+      })
+      var primaryKind = kindOf(primaryId)
+      var entries = [primaryId].concat(addedIds).filter(Boolean).map(function (id) {
+        var kind = kindOf(id)
+        return {
+          id: id, kind: kind, kindLabel: guidedKindLabel(kind),
+          n: nOf(id), groups: groupsOf(id), isPrimary: id === primaryId,
+          sameKind: Boolean(primaryId) && kind === primaryKind,
+        }
+      })
+      var sameKindIds = entries.filter(function (item) { return item.sameKind }).map(function (item) { return item.id })
+      var differentKind = entries.filter(function (item) { return !item.sameKind })
+      var needsHarmonize = sameKindIds.length >= 2
+      function templateForPrimary() {
+        return primaryKind === 'scrna' ? 'scrna-composition' : primaryKind === 'spatial' ? 'spatial-domain' : primaryKind === 'metabolomics' ? 'metabolomics-de' : 'bulk-two-group'
+      }
+
+      function buildWish(mergedId) {
+        var base = form.disease ? '针对' + form.disease + '，' : ''
+        var primary = primaryId ? '主队列用数据集 ' + primaryId : '用我已登记的数据'
+        var design = '按 ' + (form.caseGroup || 'tumor') + ' vs ' + (form.controlGroup || 'normal') + ' 比较'
+        var parts = [base + primary + '（' + guidedKindLabel(primaryKind) + '），' + design + '，模板 ' + templateForPrimary()]
+        if (mergedId) {
+          parts.push('其中同类型队列 ' + sameKindIds.join('、') + ' 已先 harmonize（method=' + method + '）去批次合并成数据集 ' + mergedId + '，请直接在这个合并数据集上继续分析')
+        } else if (needsHarmonize) {
+          parts.push('同类型队列 ' + sameKindIds.join('、') + ' 必须先 harmonize（method=' + method + '）去批次，合并成一个数据集后再分析（不要直接拼原始矩阵）')
+        }
+        if (differentKind.length) {
+          parts.push('不同类型的数据按「一脉相承」处理：' + differentKind.map(function (item) {
+            return item.id + '（' + item.kindLabel + '）' + chainHintFor(item.kind, primaryKind)
+          }).join('；'))
+        }
+        return parts.join('；') + '。先出 draft 计划，缺的字段给我候选。'
+      }
+
+      function composeAndBack() {
+        var text = buildWish('')
+        if (props.onCompose) props.onCompose(text)
         if (props.onBack) props.onBack()
       }
+      function harmonizeThenCompose() {
+        if (!api || sameKindIds.length < 2) { composeAndBack(); return }
+        setBusy('harmonize')
+        setError(null)
+        setStatus('正在去批次合并 ' + sameKindIds.length + ' 个同类型队列（' + method + '）…')
+        api.dispatch({ action: 'harmonize', dataset_ids: sameKindIds, method: method, target_scale: 'log_expression' })
+          .then(function (result) {
+            setBusy('')
+            if (!result || !result.merged_dataset_id) throw { message: (result && (result.merged_error || result.summary)) || '没有登记合并数据集' }
+            setStatus('合并完成：' + result.merged_dataset_id)
+            var text = buildWish(result.merged_dataset_id)
+            if (props.onCompose) props.onCompose(text)
+            if (props.onBack) props.onBack()
+          })
+          .catch(function (problem) {
+            setBusy('')
+            setError(problem)
+            setStatus('合并失败：' + asText(problem && (problem.message || problem.error), '未知错误'))
+          })
+      }
+
+      var datasetRows = (datasets.list || []).map(function (row) {
+        return h('option', { key: row.dataset_id, value: row.dataset_id },
+          shortId(row.dataset_id, 16) + ' · ' + asText(row.name, '') + ' · ' + guidedKindLabel(row.data_kind) + ' · n=' + asText(row.n_samples, '?'))
+      })
+      var entriesView = entries.map(function (item) {
+        return h('div', { key: item.id, className: 'bf-clinical-hit' },
+          h('div', { className: 'bf-clinical-hit-title' },
+            h('span', { className: 'bf-mono' }, item.id),
+            h('span', { className: 'bf-muted' }, ' · ' + item.kindLabel + ' · n=' + asText(item.n, '?') + (item.groups.length ? ' · 分组 ' + item.groups.join('/') : '')),
+            h('span', { className: 'bf-badge ' + (item.sameKind ? 'bf-badge-warn' : 'bf-badge-run') }, item.isPrimary ? '主队列' : item.sameKind ? '同类型：需去批次' : '不同类型：一脉相承')),
+          !item.isPrimary ? h('div', { className: 'bf-joint-actions' },
+            h('span', { className: 'bf-composer-hint' }, item.sameKind
+              ? '同类型多队列直接合并会引入批次效应，必须先 harmonize 去批次'
+              : '不同类型不合并做推断，而是作为下一步/验证：' + chainHintFor(item.kind, primaryKind)),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: function () { removeDataset(item.id) } }, '移除')) : null)
+      })
+
       return h('div', { className: 'bf-logic' },
         h('div', { className: 'bf-logic-head' },
           h('div', { className: 'bf-logic-title' },
             h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'flow', size: 13 }), '疾病引导'),
-            h('span', { className: 'bf-panel-sub' }, '选疾病 + 数据形式 + 目标 → 自动拼成一句许愿（仍只出 draft）')),
+            h('span', { className: 'bf-panel-sub' }, '疾病 + 数据（可加号追加）→ 同类型去批次合并 / 不同类型一脉相承 → 生成计划许愿')),
           h('div', { className: 'bf-spacer' }),
           h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: props.onBack }, h(Icon, { name: 'chevron', size: 11 }), '返回许愿'))),
         h('div', { className: 'bf-clinical-grid' },
           h('section', { className: 'bf-logic-card' },
-            h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '01'), h('span', { className: 'bf-logic-card-title' }, '选疾病')),
-            h('div', { className: 'bf-chips' }, DISEASE_PRESETS.map(function (preset) {
-              var on = form.disease === preset.disease
-              return h('button', {
-                key: preset.id, type: 'button', className: 'bf-chip' + (on ? ' bf-chip-on' : ''),
-                onClick: function () { pickPreset(preset) },
-              }, preset.hint + ' · ' + preset.disease)
-            })),
-            h('label', { className: 'bf-tpl-field' }, '或自定义疾病',
-              h('input', { className: 'bf-input bf-input-sm', value: form.disease, placeholder: '如 食管鳞癌新辅助治疗后', onChange: function (event) { patch('disease', event.target.value) } })),
+            h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '01'), h('span', { className: 'bf-logic-card-title' }, '疾病 / 场景')),
+            h('label', { className: 'bf-tpl-field' }, '直接输入任意疾病（癌种 + 部位 + 场景都可以）',
+              h('input', {
+                className: 'bf-input', list: 'bf-disease-suggestions', value: form.disease,
+                placeholder: '如 食管鳞癌新辅助治疗后 / 胃癌肝转移 / 胰腺癌肝转移',
+                onChange: function (event) { patch('disease', event.target.value) },
+              }),
+              h('datalist', { id: 'bf-disease-suggestions' }, DISEASE_PRESETS.map(function (preset) {
+                return h('option', { key: preset.id, value: preset.disease })
+              }))),
+            h('div', { className: 'bf-chips' },
+              h('span', { className: 'bf-composer-hint' }, '常见（点一下填入，可改）：'),
+              DISEASE_PRESETS.map(function (preset) {
+                return h('button', { key: preset.id, type: 'button', className: 'bf-chip', onClick: function () { pickPreset(preset) } }, preset.disease)
+              })),
+            h('label', { className: 'bf-tpl-field' }, '主队列（已登记数据集）',
+              datasets.loading ? h('div', { className: 'bf-muted' }, '正在加载数据集…')
+                : datasets.list.length
+                  ? h('select', { className: 'bf-select bf-input-sm', value: primaryId, onChange: function (event) { setPrimaryId(event.target.value); setAddedIds([]) } }, datasetRows)
+                  : h('div', { className: 'bf-muted' }, '还没有已登记数据集：先去「数据向导」或「AI 挑数据」下载登记，再回来。')),
+            h('label', { className: 'bf-tpl-field' }, '＋ 从本地已登记里追加（在线数据用下面一栏）',
+              h('div', { className: 'bf-row' },
+                h('select', {
+                  className: 'bf-select bf-input-sm', style: { flex: '1 1 220px' }, value: '',
+                  onChange: function (event) { addDataset(event.target.value); event.target.value = '' },
+                  disabled: !availableToAdd.length,
+                },
+                  h('option', { value: '' }, availableToAdd.length ? '选一个数据集追加…' : '没有可追加的数据集'),
+                  availableToAdd.map(function (row) {
+                    return h('option', { key: row.dataset_id, value: row.dataset_id },
+                      row.dataset_id + ' · ' + asText(row.name, '') + ' · ' + guidedKindLabel(row.data_kind))
+                  })))),
+            h('div', { className: 'bf-tpl-field', style: { marginTop: '4px' } }, '或者直接从在线库选（GEO / TCGA-GDC / MetaboLights）'),
+            h('div', { className: 'bf-row' },
+              h('input', {
+                className: 'bf-input bf-input-sm', style: { flex: '1 1 220px' },
+                value: online.term, placeholder: '检索词，默认用上面的疾病（如 gastric cancer liver metastasis）',
+                onChange: function (event) { setOnline(function (previous) { return Object.assign({}, previous, { term: event.target.value }) }) },
+                onKeyDown: function (event) { if (event.key === 'Enter') searchOnline() },
+              }),
+              h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: online.loading, onClick: searchOnline },
+                h(Icon, { name: 'search', size: 11 }), online.loading ? '检索中…' : '搜在线数据')),
+            online.error ? h('div', { className: 'bf-inline-error' }, '在线检索失败：' + asText(online.error.message || online.error, '未知错误')) : null,
+            online.loading ? h(Skeleton, { lines: 3 }) : null,
+            online.data && asArray(online.data.recommendations).length ? h('div', { className: 'bf-joint-list' }, asArray(online.data.recommendations).map(function (item) {
+              var key = asText(item.source, 'geo') + ':' + asText(item.dataset_id, '')
+              var info = onlineStatus[key] || {}
+              var summary = item.summary_zh || {}
+              return h('div', { key: key, className: 'bf-clinical-hit' },
+                h('div', { className: 'bf-clinical-hit-title' }, asText(summary.headline, asText(item.dataset_id, '')) + ' · 得分 ' + asText(item.score, 0)),
+                h('div', { className: 'bf-clinical-hit-meta bf-muted' }, asText(summary.text, '')),
+                h('div', { className: 'bf-joint-actions' },
+                  info.stage === 'done'
+                    ? h('span', { className: 'bf-mono bf-tone-ok' }, '已登记 ' + info.datasetId)
+                    : h('button', {
+                      type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary',
+                      disabled: info.stage === 'downloading' || info.stage === 'registering',
+                      onClick: function () { acquireOnline(item, true) },
+                    }, h(Icon, { name: 'download', size: 11 }), info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '设为主队列（下载+登记）'),
+                  info.stage === 'done'
+                    ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { addDataset(info.datasetId) } }, '追加为联合队列')
+                    : h('button', {
+                      type: 'button', className: 'bf-btn bf-btn-sm',
+                      disabled: info.stage === 'downloading' || info.stage === 'registering',
+                      onClick: function () { acquireOnline(item, false) },
+                    }, info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '追加为联合队列（下载+登记）'),
+                  info.error ? h('span', { className: 'bf-tone-err' }, info.error) : null))
+            })) : null,
             h('div', { className: 'bf-tpl-grid' },
-              h('label', { className: 'bf-tpl-field' }, '数据形式',
-                h('select', { className: 'bf-select bf-input-sm', value: form.data, onChange: function (event) { patch('data', event.target.value) } },
-                  WISH_FORMS.map(function (item) { return h('option', { key: item.id, value: item.id }, item.label) }))),
-              h('label', { className: 'bf-tpl-field' }, '分析目标',
-                h('select', { className: 'bf-select bf-input-sm', value: form.goal, onChange: function (event) { patch('goal', event.target.value) } },
-                  WISH_GOALS.map(function (item) { return h('option', { key: item.id, value: item.id }, item.label) }))),
               h('label', { className: 'bf-tpl-field' }, '实验组',
                 h('input', { className: 'bf-input bf-input-sm', value: form.caseGroup, onChange: function (event) { patch('caseGroup', event.target.value) } })),
               h('label', { className: 'bf-tpl-field' }, '对照组',
-                h('input', { className: 'bf-input bf-input-sm', value: form.controlGroup, onChange: function (event) { patch('controlGroup', event.target.value) } }))),
-            h('label', { className: 'bf-tpl-field' }, '指定数据集 / 编号（可空；空则先找数据）',
-              h('input', { className: 'bf-input bf-input-sm', value: form.place, placeholder: 'GSE#### / ds_xxx', onChange: function (event) { patch('place', event.target.value) } }))),
+                h('input', { className: 'bf-input bf-input-sm', value: form.controlGroup, onChange: function (event) { patch('controlGroup', event.target.value) } })),
+              h('label', { className: 'bf-tpl-field' }, '分析目标',
+                h('select', { className: 'bf-select bf-input-sm', value: form.goal, onChange: function (event) { patch('goal', event.target.value) } },
+                  WISH_GOALS.map(function (item) { return h('option', { key: item.id, value: item.id }, item.label) }))),
+              needsHarmonize ? h('label', { className: 'bf-tpl-field' }, '去批次方法',
+                h('select', { className: 'bf-select bf-input-sm', value: method, onChange: function (event) { setMethod(event.target.value) } },
+                  ['quantile', 'combat', 'scale_only', 'none'].map(function (item) { return h('option', { key: item, value: item }, item) }))) : null),
+            needsHarmonize ? h('div', { className: 'bf-inline-error', style: { marginTop: '2px' } },
+              '检测到 ' + sameKindIds.length + ' 个同类型队列（' + sameKindIds.join('、') + '）：直接合并会引入批次效应，必须先 harmonize 去批次再合并/联合。') : null),
           h('section', { className: 'bf-logic-card' },
-            h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '02'), h('span', { className: 'bf-logic-card-title' }, '将生成的许愿')),
-            h('div', { className: 'bf-logic-preview' }, composed),
+            h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '02'), h('span', { className: 'bf-logic-card-title' }, '已选数据与处理方式')),
+            h('div', { className: 'bf-joint-list' }, entriesView.length ? entriesView : h('div', { className: 'bf-muted' }, '先在左边选主队列，再用「＋ 追加数据」加其他队列。')),
+            status ? h('div', { className: 'bf-logic-status' }, status) : null,
+            error ? h('div', { className: 'bf-inline-error' }, '失败：' + asText(error.message || error.error || error, '未知错误')) : null,
+            h('div', { className: 'bf-logic-card-head' }, h('span', { className: 'bf-logic-step bf-mono' }, '03'), h('span', { className: 'bf-logic-card-title' }, '将生成的计划许愿')),
+            h('div', { className: 'bf-logic-preview' }, buildWish('')),
             h('div', { className: 'bf-joint-actions' },
-              h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: useWish }, h(Icon, { name: 'send', size: 11 }), '填入许愿并返回'),
-              h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { if (props.onQuestion) props.onQuestion(form.disease) } }, '换成问题入手')),
-            h('p', { className: 'bf-logic-hint' }, '提示：疾病引导只负责把结构化选择拼成一句话；是否执行仍由你在许愿里发出去，之后 agent 出 draft 计划，缺字段会高亮。')))
+              h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: Boolean(busy), onClick: composeAndBack },
+                h(Icon, { name: 'send', size: 11 }), '生成计划许愿'),
+              needsHarmonize ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: Boolean(busy), onClick: harmonizeThenCompose },
+                h(Icon, { name: 'flow', size: 11 }), busy === 'harmonize' ? '去批次合并中…' : '先去批次合并，再生成计划') : null,
+              h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: function () { if (props.onQuestion) props.onQuestion(form.disease) } }, '换成问题入手')),
+            h('p', { className: 'bf-logic-hint' }, '同类型（多个 bulk）：必须先 harmonize 去批次再合并，不能直接拼矩阵；不同类型（bulk + 单细胞/空间/代谢）：按「一脉相承」串起来（映射/验证/正交），不做跨模态合并推断。')))
     }
 
     // ----------------------------------------------------------------------
@@ -4125,9 +4377,20 @@
       var statusState = useState('')
       var status = statusState[0]
       var setStatus = statusState[1]
+      var topicsState = useState({ loading: false, error: null, data: null })
+      var topics = topicsState[0]
+      var setTopics = topicsState[1]
 
       function patch(key, value) {
         setForm(function (previous) { return Object.assign({}, previous, { [key]: value }) })
+      }
+      function loadTopics() {
+        var disease = asText(form.disease, '').trim() || asText(form.term, '').trim()
+        if (!disease || !api) { setTopics({ loading: false, error: { message: '先填疾病/场景' }, data: null }); return }
+        setTopics({ loading: true, error: null, data: null })
+        api.dispatch({ action: 'topics', disease: disease })
+          .then(function (data) { setTopics({ loading: false, error: null, data: data }) })
+          .catch(function (problem) { setTopics({ loading: false, error: problem, data: null }) })
       }
       function toggleSource(id) {
         setSources(function (previous) { return Object.assign({}, previous, { [id]: !previous[id] }) })
@@ -4216,6 +4479,27 @@
             h('label', { className: 'bf-tpl-field' }, '检索关键词（可空，默认拼上面三项）',
               h('input', { className: 'bf-input bf-input-sm', value: form.term, placeholder: '如 gastric cancer liver metastasis NK cell', onChange: function (event) { patch('term', event.target.value) } })),
             h('div', { className: 'bf-joint-actions' },
+              h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: topics.loading, onClick: loadTopics },
+                h(Icon, { name: 'search', size: 11 }), topics.loading ? '正在找选题…' : '给我几个选题（含近两年综述热点）')),
+            topics.error ? h('div', { className: 'bf-inline-error' }, '选题检索失败：' + asText(topics.error.message || topics.error, '未知错误')) : null,
+            topics.data ? h('div', { className: 'bf-joint-section' },
+              h('div', { className: 'bf-joint-title' }, '候选临床现象 / 问题（点一个填入左侧）'),
+              h('div', { className: 'bf-chips' }, asArray(topics.data.phenomena).map(function (item, index) {
+                return h('button', {
+                  key: item.id || index, type: 'button', className: 'bf-chip',
+                  title: '点一下填入「现象」',
+                  onClick: function () { patch('phenomenon', asText(item.text, '')) },
+                }, asText(item.text, ''))
+              })),
+              asArray(topics.data.hot_topics).length ? h('div', { className: 'bf-joint-list' }, asArray(topics.data.hot_topics).map(function (paper, index) {
+                return h('div', { key: paper.pmid || index, className: 'bf-clinical-hit' },
+                  h('div', { className: 'bf-clinical-hit-title' }, asText(paper.title, '')),
+                  h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                    h('span', { className: 'bf-mono' }, paper.pmid ? 'PMID ' + paper.pmid : ''),
+                    h('span', null, asText(paper.journal, '')),
+                    h('span', null, asText(paper.year, ''))))
+              })) : null) : null,
+            h('div', { className: 'bf-joint-actions' },
               h('span', { className: 'bf-composer-hint' }, '数据源'),
               CLINICAL_SOURCES.map(function (item) {
                 return h('label', { key: item.id, className: 'bf-joint-field' },
@@ -4263,6 +4547,523 @@
                 var entry = search.data.by_source[key] || {}
                 return key + '：' + asText(entry.total, 0) + ' 命中 / 取回 ' + asText(entry.fetched, 0)
               }).join(' · ')) : null)))
+    }
+
+    // ----------------------------------------------------------------------
+    // AI 挑数据：给一句话 → 推荐数据集 + 文献线索 + 推荐方案 + 一键下载登记
+    // ----------------------------------------------------------------------
+    function AdvisorPanel(props) {
+      var api = props.api
+      var needState = useState('')
+      var need = needState[0]
+      var setNeed = needState[1]
+      var runState = useState({ loading: false, error: null, data: null })
+      var run = runState[0]
+      var setRun = runState[1]
+      var chainState = useState({})
+      var chain = chainState[0]
+      var setChain = chainState[1]
+      var statusState = useState('')
+      var status = statusState[0]
+      var setStatus = statusState[1]
+
+      function advise() {
+        if (!api || !need.trim()) return
+        setRun({ loading: true, error: null, data: null })
+        setStatus('')
+        api.dispatch({ action: 'advise', need: need.trim(), sources: ['geo', 'pubmed', 'gdc'], limit: 8 })
+          .then(function (data) { setRun({ loading: false, error: null, data: data }) })
+          .catch(function (problem) { setRun({ loading: false, error: problem, data: null }) })
+      }
+      function patchChain(id, value) {
+        setChain(function (previous) { return Object.assign({}, previous, { [id]: Object.assign({}, previous[id], value) }) })
+      }
+      function acquire(recommendation) {
+        var id = recommendation.dataset_id
+        patchChain(id, { stage: 'downloading', error: null, datasetId: null })
+        setStatus('正在下载 ' + id + ' …')
+        api.dispatch({ action: 'download', source: recommendation.source, id: id })
+          .then(function (download) {
+            var artifacts = asArray(download && download.artifact_ids)
+            if (!artifacts.length && download && download.artifacts) artifacts = asArray(download.artifacts).map(function (item) { return item.artifact_id || item.id })
+            if (!artifacts.length) throw { message: '下载没有返回 artifact_id' }
+            patchChain(id, { stage: 'registering' })
+            setStatus('下载完成，正在登记并自动探测矩阵方向/尺度…')
+            return api.dispatch({ action: 'register', artifact_ids: artifacts, name: id, assay: 'auto' })
+          })
+          .then(function (registered) {
+            var dataset = registered && registered.dataset
+            if (!dataset) throw { message: (registered && registered.summary) || '登记失败' }
+            patchChain(id, { stage: 'done', datasetId: dataset.dataset_id, summary: registered.summary })
+            setStatus('已登记 ' + dataset.dataset_id + '：' + asText(registered.summary, ''))
+            if (props.onRefreshRuns) props.onRefreshRuns()
+          })
+          .catch(function (problem) {
+            patchChain(id, { stage: 'error', error: asText(problem && (problem.message || problem.error), '失败') })
+            setStatus('失败：' + asText(problem && (problem.message || problem.error), '未知错误'))
+          })
+      }
+      function useForPlan(recommendation, datasetId) {
+        var kind = asText(recommendation && recommendation.kind, 'bulk')
+        var template = kind === 'scrna' ? 'scrna-composition' : kind === 'spatial' ? 'spatial-domain' : kind === 'metabolomics' ? 'metabolomics-de' : 'bulk-two-group'
+        if (props.onCompose) props.onCompose('用数据集 ' + datasetId + ' 按 tumor vs normal 做分析（模板 ' + template + '），缺的字段给我候选，先出 draft 计划')
+        if (props.onBackToWish) props.onBackToWish()
+      }
+      var data = run.data
+      return h('div', { className: 'bf-joint' },
+        h('div', { className: 'bf-panel-head' },
+          h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'search', size: 12 }), 'AI 挑数据'),
+          h('span', { className: 'bf-panel-sub' }, '给一句话：自动检索并排序候选队列、给文献线索、推荐模板与下一步')),
+        h('div', { className: 'bf-joint-body' },
+          h('div', { className: 'bf-joint-actions' },
+            h('input', {
+              className: 'bf-input bf-input-sm', style: { flex: '1 1 260px' }, value: need,
+              placeholder: '如 胃癌肝转移 NK 细胞 单细胞 预后',
+              onChange: function (event) { setNeed(event.target.value) },
+              onKeyDown: function (event) { if (event.key === 'Enter') advise() },
+            }),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: run.loading, onClick: advise },
+              h(Icon, { name: 'search', size: 11 }), run.loading ? '正在挑…' : '让 AI 挑数据')),
+          status ? h('div', { className: 'bf-logic-status' }, status) : null,
+          run.error ? h('div', { className: 'bf-inline-error' }, '失败：' + asText(run.error.message || run.error, '未知错误')) : null,
+          run.loading ? h(Skeleton, { lines: 4 }) : null,
+          data ? h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '推荐（' + asArray(data.recommendations).length + '）· 检索词：' + asText(data.search_term, '')),
+            h('div', { className: 'bf-joint-list' }, asArray(data.recommendations).map(function (recommendation, index) {
+              var id = recommendation.dataset_id
+              var state = chain[id] || {}
+              return h('div', { key: id || index, className: 'bf-clinical-hit' },
+                h('div', { className: 'bf-clinical-hit-title' },
+                  h('span', { className: 'bf-mono' }, (index + 1) + '. ' + asText(id, '')),
+                  h('span', { className: 'bf-muted' }, ' · ' + asText(recommendation.source, '') + ' · ' + asText(recommendation.kind, '') + ' · n=' + asText(recommendation.n_samples, '?'))),
+                h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                  h('span', { className: 'bf-badge bf-badge-run' }, '得分 ' + asText(recommendation.score, 0)),
+                  asArray(recommendation.reasons).slice(0, 3).map(function (reason, i) { return h('span', { key: 'r' + i }, '✓ ' + asText(reason, '')) }),
+                  asArray(recommendation.risks).slice(0, 2).map(function (risk, i) { return h('span', { key: 'k' + i, className: 'bf-tone-warn' }, '⚠ ' + asText(risk, '')) })),
+                h('div', { className: 'bf-joint-actions' },
+                  state.stage === 'done'
+                    ? h('span', { className: 'bf-mono bf-tone-ok' }, state.datasetId)
+                    : h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: state.stage === 'downloading' || state.stage === 'registering', onClick: function () { acquire(recommendation) } },
+                      h(Icon, { name: 'download', size: 11 }), state.stage === 'downloading' ? '下载中…' : state.stage === 'registering' ? '登记中…' : '下载并登记'),
+                  state.stage === 'done'
+                    ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: function () { useForPlan(recommendation, state.datasetId) } }, h(Icon, { name: 'send', size: 11 }), '生成计划许愿')
+                    : null,
+                  state.error ? h('span', { className: 'bf-tone-err' }, state.error) : null))
+            }))) : null,
+          data && asArray(data.literature).length ? h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '文献线索（别人做过什么）'),
+            h('div', { className: 'bf-joint-list' }, asArray(data.literature).map(function (paper, index) {
+              return h('div', { key: paper.pmid || index, className: 'bf-clinical-hit' },
+                h('div', { className: 'bf-clinical-hit-title' }, asText(paper.title, '')),
+                h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                  h('span', { className: 'bf-mono' }, paper.pmid ? 'PMID ' + paper.pmid : ''),
+                  h('span', null, asText(paper.journal, '')),
+                  h('span', null, asText(paper.year, ''))))
+            }))) : null,
+          data && data.plan_hint ? h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '推荐方案'),
+            h('div', { className: 'bf-logic-preview' },
+              h('div', null, '模板：' + asText(data.plan_hint.template, '')),
+              h('div', null, '对照：' + asText(data.plan_hint.contrast_suggestion, '')),
+              h('div', null, '要盯的闸门：' + asArray(data.plan_hint.gates_to_watch).join('、')),
+              data.plan_hint.multi_dataset
+                ? h('div', { className: 'bf-tone-warn' }, '多队列建议：' + asText(data.plan_hint.multi_dataset.suggestion, ''))
+                : null)) : null,
+          data && asArray(data.next_steps).length ? h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '下一步怎么做'),
+            h('div', { className: 'bf-joint-list' }, asArray(data.next_steps).map(function (step, index) {
+              return h('div', { key: index, className: 'bf-clinical-hit' }, h('div', { className: 'bf-clinical-hit-title bf-mono' }, asText(step, '')))
+            }))) : null))
+    }
+
+    // ----------------------------------------------------------------------
+    // 候选数据集弹窗（中文摘要；问句里没点名时自动弹出）
+    // ----------------------------------------------------------------------
+    function DatasetPickerModal(props) {
+      var options = asArray(props.options)
+      if (!props.open) return null
+      return h('div', { className: 'bf-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': '候选数据集' },
+        h('div', { className: 'bf-modal-card' },
+          h('div', { className: 'bf-modal-head' },
+            h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'list', size: 13 }), '候选数据集（中文摘要）'),
+            h('span', { className: 'bf-panel-sub' }, '系统先替你挑了；点「用这个」就按它出计划，也可以换别的'),
+            h('div', { className: 'bf-spacer' }),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: props.onClose }, h(Icon, { name: 'close', size: 11 }), '关闭')),
+          h('div', { className: 'bf-modal-body' }, options.length ? options.map(function (option) {
+            var summary = option.summary_zh || {}
+            var selected = option.dataset_id === props.currentId
+            return h('div', { key: option.dataset_id, className: 'bf-clinical-hit' + (selected ? ' bf-wizard-picked' : '') },
+              h('div', { className: 'bf-clinical-hit-title' }, asText(summary.headline, asText(option.dataset_id, ''))),
+              h('div', { className: 'bf-clinical-hit-meta bf-muted' }, asText(summary.text, '')),
+              asArray(summary.suitable).length ? h('div', { className: 'bf-clinical-hit-meta' }, asArray(summary.suitable).map(function (item, index) {
+                return h('span', { key: 's' + index, className: 'bf-badge bf-badge-ok' }, '✓ ' + asText(item, ''))
+              })) : null,
+              asArray(summary.risks).length ? h('div', { className: 'bf-clinical-hit-meta' }, asArray(summary.risks).map(function (item, index) {
+                return h('span', { key: 'r' + index, className: 'bf-tone-warn' }, '⚠ ' + asText(item, ''))
+              })) : null,
+              h('div', { className: 'bf-joint-actions' },
+                h('button', {
+                  type: 'button', className: 'bf-btn bf-btn-sm' + (selected ? '' : ' bf-btn-primary'),
+                  onClick: function () { props.onPick(option.dataset_id) },
+                }, selected ? '当前已选' : '用这个数据集出计划'),
+                h('span', { className: 'bf-mono bf-muted' }, asText(option.dataset_id, ''))))
+          }) : h('div', { className: 'bf-muted' }, '还没有已登记的数据集：先到「数据向导」或「AI 挑数据」里下载登记。'))))
+    }
+
+    // ----------------------------------------------------------------------
+    // 数据向导：候选 → 每个数据集一页（分组提案，只检查）→ 总结页 → 执行
+    // ----------------------------------------------------------------------
+    var GROUP_CASE_WORDS = /(tumou?r|case|disease|cancer|carcinoma|metasta|malignant|treated|resistant|progress)/i
+    var GROUP_CONTROL_WORDS = /(normal|control|healthy|adjacent|para|non.?tumou?r|untreated|sensitive|benign|baseline)/i
+
+    function proposeContrast(groups) {
+      var list = (groups || []).filter(Boolean)
+      if (list.length < 2) return null
+      var score = function (name) { return GROUP_CONTROL_WORDS.test(name) ? -1 : GROUP_CASE_WORDS.test(name) ? 1 : 0 }
+      var sorted = list.slice().sort(function (a, b) {
+        var diff = score(b) - score(a)
+        return diff !== 0 ? diff : String(a).localeCompare(String(b))
+      })
+      return { case: sorted[0], control: sorted[1], direction: 'case_minus_control' }
+    }
+
+    function templateForKind(kind) {
+      return kind === 'scrna' ? 'scrna-composition' : kind === 'spatial' ? 'spatial-domain' : kind === 'metabolomics' ? 'metabolomics-de' : 'bulk-two-group'
+    }
+
+    function DataWizard(props) {
+      var api = props.api
+      var stepState = useState(1)
+      var step = stepState[0]
+      var setStep = stepState[1]
+      var needState = useState(asText(props.seedText, ''))
+      var need = needState[0]
+      var setNeed = needState[1]
+      var adviseState = useState({ loading: false, error: null, data: null })
+      var advise = adviseState[0]
+      var setAdvise = adviseState[1]
+      var selectionState = useState({})       // key -> {checked, role}
+      var selection = selectionState[0]
+      var setSelection = selectionState[1]
+      var registeredState = useState({ loading: true, list: [], error: null })
+      var registered = registeredState[0]
+      var setRegistered = registeredState[1]
+      var acquiredState = useState({})        // key -> {stage, datasetId, error}
+      var acquired = acquiredState[0]
+      var setAcquired = acquiredState[1]
+      var configState = useState({})          // datasetId -> {role, caseGroup, controlGroup, include}
+      var config = configState[0]
+      var setConfig = configState[1]
+      var currentState = useState('')
+      var current = currentState[0]
+      var setCurrent = currentState[1]
+      var mergeState = useState('joint')
+      var mergeMode = mergeState[0]
+      var setMergeMode = mergeState[1]
+      var methodState = useState('quantile')
+      var method = methodState[0]
+      var setMethod = methodState[1]
+      var busyState = useState('')
+      var busy = busyState[0]
+      var setBusy = busyState[1]
+      var statusState = useState('')
+      var status = statusState[0]
+      var setStatus = statusState[1]
+      var errorState = useState(null)
+      var error = errorState[0]
+      var setError = errorState[1]
+
+      React.useEffect(function () {
+        if (!api) return
+        api.dispatch({ action: 'datasets', limit: 100 }).then(function (data) {
+          setRegistered({ loading: false, error: null, list: asArray(data && data.datasets) })
+        }).catch(function (problem) { setRegistered({ loading: false, error: problem, list: [] }) })
+      }, [])
+
+      function runAdvise() {
+        if (!api || !need.trim()) return
+        setAdvise({ loading: true, error: null, data: null })
+        api.dispatch({ action: 'advise', need: need.trim(), sources: ['geo', 'pubmed', 'gdc'], limit: 8 })
+          .then(function (data) { setAdvise({ loading: false, error: null, data: data }) })
+          .catch(function (problem) { setAdvise({ loading: false, error: problem, data: null }) })
+      }
+      function toggle(key, checked) {
+        setSelection(function (previous) {
+          var next = Object.assign({}, previous)
+          next[key] = { checked: checked, role: (previous[key] && previous[key].role) || 'single' }
+          return next
+        })
+      }
+      function setRole(key, role) {
+        setSelection(function (previous) { return Object.assign({}, previous, { [key]: Object.assign({}, previous[key], { role: role, checked: true }) }) })
+      }
+      function chosenKeys() {
+        return Object.keys(selection).filter(function (key) { return selection[key] && selection[key].checked })
+      }
+      function acquireByKey(key, source, id) {
+        setAcquired(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'downloading' } }) })
+        setStatus('正在下载 ' + id + ' …')
+        api.dispatch({ action: 'download', source: source, id: id }).then(function (download) {
+          var artifacts = asArray(download && download.artifact_ids)
+          if (!artifacts.length && download && download.artifacts) artifacts = asArray(download.artifacts).map(function (item) { return item.artifact_id || item.id })
+          if (!artifacts.length) throw { message: '下载没有返回 artifact_id' }
+          setAcquired(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'registering' } }) })
+          setStatus('下载完成，正在登记并自动探测方向/尺度…')
+          return api.dispatch({ action: 'register', artifact_ids: artifacts, name: id, assay: 'auto' })
+        }).then(function (result) {
+          var dataset = result && result.dataset
+          if (!dataset) throw { message: (result && result.summary) || '登记失败' }
+          setAcquired(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'done', datasetId: dataset.dataset_id } }) })
+          setStatus('已登记 ' + dataset.dataset_id)
+          setSelection(function (previous) { return Object.assign({}, previous, { [key]: Object.assign({}, previous[key], { checked: true }) }) })
+          api.dispatch({ action: 'datasets', limit: 100 }).then(function (data) {
+            setRegistered({ loading: false, error: null, list: asArray(data && data.datasets) })
+          }).catch(function () { /* ignore */ })
+        }).catch(function (problem) {
+          setAcquired(function (previous) { return Object.assign({}, previous, { [key]: { stage: 'error', error: asText(problem && (problem.message || problem.error), '失败') } }) })
+          setStatus('失败：' + asText(problem && (problem.message || problem.error), '未知错误'))
+        })
+      }
+
+      // 汇总：已登记（可选执行）的数据集 + 建议配置
+      var chosen = chosenKeys().map(function (key) {
+        var candidate = null
+        var items = advise.data ? asArray(advise.data.recommendations) : []
+        for (var index = 0; index < items.length; index += 1) {
+          if (items[index].source + ':' + items[index].dataset_id === key) { candidate = items[index]; break }
+        }
+        if (!candidate && key.indexOf('ds:') === 0) {
+          var id = key.slice(3)
+          var row = (registered.list || []).find(function (item) { return item.dataset_id === id })
+          candidate = row ? { dataset_id: id, source: 'registered', title: row.name, n_samples: row.n_samples, kind: row.data_kind, groups: row.groups || [], score: null, reasons: ['已登记的数据集'], risks: [] } : null
+        }
+        var acquiredInfo = acquired[key] || {}
+        var datasetId = acquiredInfo.datasetId || (key.indexOf('ds:') === 0 ? key.slice(3) : null)
+        var cfg = (datasetId && config[datasetId]) || {}
+        return {
+          key: key, candidate: candidate, datasetId: datasetId,
+          role: (selection[key] && selection[key].role) || 'single',
+          caseGroup: cfg.caseGroup || null, controlGroup: cfg.controlGroup || null,
+          include: cfg.include !== false,
+        }
+      }).filter(Boolean)
+      var usable = chosen.filter(function (item) { return item.datasetId && item.include })
+      var selectedDatasets = usable.map(function (item) { return item.datasetId })
+
+      function openDataset(datasetId) {
+        setCurrent(datasetId)
+        if (config[datasetId]) return
+        api.dispatch({ action: 'datasets', dataset_id: datasetId }).then(function (data) {
+          var dataset = data && data.dataset
+          if (!dataset) return
+          var groups = [...new Set((asArray(dataset.design && dataset.design.samples)).map(function (sample) { return String(sample.group || '') }).filter(Boolean))]
+          var proposal = proposeContrast(groups)
+          setConfig(function (previous) {
+            var next = Object.assign({}, previous)
+            next[datasetId] = {
+              role: (previous[datasetId] && previous[datasetId].role) || 'primary',
+              include: true,
+              groups,
+              caseGroup: (previous[datasetId] && previous[datasetId].caseGroup) || (proposal ? proposal.case : ''),
+              controlGroup: (previous[datasetId] && previous[datasetId].controlGroup) || (proposal ? proposal.control : ''),
+              dataset,
+            }
+            return next
+          })
+        }).catch(function (problem) { setError(problem) })
+      }
+      function patchConfig(datasetId, patch) {
+        setConfig(function (previous) { return Object.assign({}, previous, { [datasetId]: Object.assign({}, previous[datasetId], patch) }) })
+      }
+
+      function execute() {
+        setError(null)
+        if (!usable.length) { setError({ message: '还没有「已登记」的数据集：先在候选页点「下载并登记」，或直接选已登记数据集' }); return }
+        var first = usable[0]
+        var primaryCase = first.caseGroup || 'tumor'
+        var primaryControl = first.controlGroup || 'normal'
+        setBusy('execute')
+        if (mergeMode === 'joint' && usable.length >= 2) {
+          setStatus('正在合并 ' + usable.length + ' 个数据集（harmonize ' + method + '）…')
+          api.dispatch({ action: 'harmonize', dataset_ids: usable.map(function (item) { return item.datasetId }), method: method, target_scale: 'log_expression' })
+            .then(function (result) {
+              setBusy('')
+              if (!result || !result.merged_dataset_id) throw { message: (result && (result.merged_error || result.summary)) || '没有登记合并数据集' }
+              setStatus('合并完成：' + result.merged_dataset_id + '，已生成计划许愿')
+              var text = '用合并数据集 ' + result.merged_dataset_id + ' 按 ' + primaryCase + ' vs ' + primaryControl + ' 做分析，先出 draft 计划'
+              if (props.onCompose) props.onCompose(text)
+              if (props.onBack) props.onBack()
+            }).catch(function (problem) {
+              setBusy('')
+              setError(problem)
+              setStatus('合并失败：' + asText(problem && (problem.message || problem.error), '未知错误'))
+            })
+          return
+        }
+        setBusy('')
+        var text = usable.length === 1
+          ? '用数据集 ' + first.datasetId + ' 按 ' + primaryCase + ' vs ' + primaryControl + ' 做分析（模板 ' + templateForKind(first.candidate && first.candidate.kind) + '），先出 draft 计划'
+          : '分别用数据集 ' + usable.map(function (item) { return item.datasetId }).join('、') + ' 各跑一次差异分析（按 ' + primaryCase + ' vs ' + primaryControl + '），做完用 joint meta 合并结果'
+        if (props.onCompose) props.onCompose(text)
+        if (props.onBack) props.onBack()
+      }
+
+      var stepTitles = ['① 选数据', '② 逐个检查', '③ 总结并执行']
+      var currentConfig = current && config[current] ? config[current] : null
+      return h('div', { className: 'bf-wizard' },
+        h('div', { className: 'bf-wizard-head' },
+          h('div', null,
+            h('div', { className: 'bf-panel-title' }, h(Icon, { name: 'flow', size: 13 }), '数据向导'),
+            h('div', { className: 'bf-panel-sub' }, 'AI 给候选 → 每个数据集一页（分组/对照先给提案，你检查）→ 总结页确认后执行')),
+          h('div', { className: 'bf-spacer' }),
+          h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: props.onBack }, h(Icon, { name: 'chevron', size: 11 }), '返回许愿')),
+        h('div', { className: 'bf-wizard-steps' }, stepTitles.map(function (title, index) {
+          var active = step === index + 1
+          return h('button', {
+            key: title, type: 'button', className: 'bf-tab' + (active ? ' bf-tab-on' : ''),
+            onClick: function () { setStep(index + 1) },
+          }, title)
+        })),
+        status ? h('div', { className: 'bf-logic-status' }, status) : null,
+        error ? h('div', { className: 'bf-inline-error' }, asText(error.message || error.error || error, '请求失败')) : null,
+
+        step === 1 ? h('div', { className: 'bf-wizard-body' },
+          h('div', { className: 'bf-joint-actions' },
+            h('input', {
+              className: 'bf-input bf-input-sm', style: { flex: '1 1 320px' }, value: need,
+              placeholder: '说一句你要解决的问题，AI 会去找候选数据集',
+              onChange: function (event) { setNeed(event.target.value) },
+              onKeyDown: function (event) { if (event.key === 'Enter') runAdvise() },
+            }),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: advise.loading, onClick: runAdvise },
+              h(Icon, { name: 'search', size: 11 }), advise.loading ? '正在挑…' : '让 AI 找候选')),
+          advise.error ? h('div', { className: 'bf-inline-error' }, '检索失败：' + asText(advise.error.message || advise.error, '未知错误')) : null,
+          h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '候选数据集（勾选后选「单独」或「联合」）'),
+            advise.loading ? h(Skeleton, { lines: 4 }) : null,
+            h('div', { className: 'bf-joint-list' }, asArray(advise.data && advise.data.recommendations).map(function (item) {
+              var key = item.source + ':' + item.dataset_id
+              var chosenRow = selection[key] || {}
+              var info = acquired[key] || {}
+              return h('div', { key: key, className: 'bf-clinical-hit' + (chosenRow.checked ? ' bf-wizard-picked' : '') },
+                h('label', { className: 'bf-joint-row' },
+                  h('input', { type: 'checkbox', checked: Boolean(chosenRow.checked), onChange: function (event) { toggle(key, event.target.checked) } }),
+                  h('span', { className: 'bf-mono' }, asText(item.dataset_id, '')),
+                  h('span', { className: 'bf-truncate' }, asText(item.title, '')),
+                  h('span', { className: 'bf-badge bf-badge-run' }, '得分 ' + asText(item.score, 0))),
+                h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                  h('span', null, asText(item.source, '') + ' · ' + asText(item.kind, '') + ' · n=' + asText(item.n_samples, '?')),
+                  asArray(item.reasons).slice(0, 3).map(function (reason, i) { return h('span', { key: 'r' + i }, '✓ ' + asText(reason, '')) }),
+                  asArray(item.risks).slice(0, 2).map(function (risk, i) { return h('span', { key: 'k' + i, className: 'bf-tone-warn' }, '⚠ ' + asText(risk, '')) })),
+                h('div', { className: 'bf-joint-actions' },
+                  h('label', { className: 'bf-joint-field' }, '用法',
+                    h('select', { className: 'bf-select bf-input-sm', value: chosenRow.role || 'single', onChange: function (event) { setRole(key, event.target.value) } },
+                      h('option', { value: 'single' }, '单独跑'),
+                      h('option', { value: 'joint' }, '参与联合'))),
+                  info.stage === 'done'
+                    ? h('span', { className: 'bf-mono bf-tone-ok' }, info.datasetId)
+                    : h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: info.stage === 'downloading' || info.stage === 'registering', onClick: function () { acquireByKey(key, item.source, item.dataset_id) } },
+                      h(Icon, { name: 'download', size: 11 }), info.stage === 'downloading' ? '下载中…' : info.stage === 'registering' ? '登记中…' : '下载并登记'),
+                  info.error ? h('span', { className: 'bf-tone-err' }, info.error) : null))
+            }))),
+          h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '或者直接选已登记的数据集'),
+            registered.loading ? h(Skeleton, { lines: 2 }) : h('div', { className: 'bf-joint-list' }, asArray(registered.list).map(function (row) {
+              var key = 'ds:' + row.dataset_id
+              var chosenRow = selection[key] || {}
+              return h('label', { key: key, className: 'bf-joint-row' + (chosenRow.checked ? ' bf-joint-row-on' : '') },
+                h('input', { type: 'checkbox', checked: Boolean(chosenRow.checked), onChange: function (event) { toggle(key, event.target.checked) } }),
+                h('span', { className: 'bf-mono' }, shortId(row.dataset_id, 18)),
+                h('span', { className: 'bf-truncate' }, asText(row.name, '')),
+                h('span', { className: 'bf-muted' }, asText(row.data_kind, '') + ' · n=' + asText(row.n_samples, '?')))
+            }))) ,
+          h('div', { className: 'bf-joint-actions' },
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: !chosenKeys().length, onClick: function () { setStep(2) } },
+              '下一步：逐个检查（' + chosenKeys().length + '）')))
+
+        : step === 2 ? h('div', { className: 'bf-wizard-body' },
+          h('div', { className: 'bf-wizard-split' },
+            h('div', { className: 'bf-wizard-side' }, chosen.filter(function (item) { return item.datasetId }).map(function (item) {
+              return h('button', {
+                key: item.key, type: 'button',
+                className: 'bf-runitem' + (current === item.datasetId ? ' bf-runitem-on' : ''),
+                onClick: function () { openDataset(item.datasetId) },
+              },
+                h('div', { className: 'bf-runitem-main' },
+                  h('span', { className: 'bf-mono' }, shortId(item.datasetId, 16)),
+                  h('span', { className: 'bf-truncate' }, asText(item.candidate && item.candidate.title, ''))),
+                h('div', { className: 'bf-runitem-sub' },
+                  h('span', null, 'n=' + asText(item.candidate && item.candidate.n_samples, '?')),
+                  h('span', null, asText(item.role, 'single'))))
+            })),
+            h('div', { className: 'bf-wizard-main' },
+              !current ? h(EmptyState, { icon: 'list', title: '选一个数据集检查', sub: '左边是已勾选且已登记的数据集；点开后会先给分组/对照提案，你只需要检查确认。' })
+                : !currentConfig ? h(Skeleton, { lines: 5 })
+                  : h('div', { className: 'bf-joint-section' },
+                    h('div', { className: 'bf-joint-title' }, asText(currentConfig.dataset && currentConfig.dataset.name, current)),
+                    h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                      h('span', null, 'n=' + asText(asArray(currentConfig.dataset && currentConfig.dataset.design && currentConfig.dataset.design.samples).length, '?')),
+                      h('span', null, 'scale=' + asText(currentConfig.dataset && currentConfig.dataset.scale && currentConfig.dataset.scale.type, '?')),
+                      h('span', null, 'transpose=' + asText(currentConfig.dataset && currentConfig.dataset.transpose, '?'))),
+                    h('div', { className: 'bf-joint-title' }, '系统提案（请检查）'),
+                    h('div', { className: 'bf-logic-preview' },
+                      h('div', null, '分组：' + asArray(currentConfig.groups).join('、')),
+                      h('div', null, '建议对照：' + asText(currentConfig.caseGroup, '?') + ' vs ' + asText(currentConfig.controlGroup, '?')),
+                      h('div', null, '建议模板：' + templateForKind(currentConfig.dataset && currentConfig.dataset.data_kind))),
+                    h('div', { className: 'bf-tpl-grid' },
+                      h('label', { className: 'bf-tpl-field' }, '实验组',
+                        h('select', { className: 'bf-select bf-input-sm', value: currentConfig.caseGroup, onChange: function (event) { patchConfig(current, { caseGroup: event.target.value }) } },
+                          asArray(currentConfig.groups).map(function (group) { return h('option', { key: group, value: group }, group) }))),
+                      h('label', { className: 'bf-tpl-field' }, '对照组',
+                        h('select', { className: 'bf-select bf-input-sm', value: currentConfig.controlGroup, onChange: function (event) { patchConfig(current, { controlGroup: event.target.value }) } },
+                          asArray(currentConfig.groups).map(function (group) { return h('option', { key: group, value: group }, group) }))),
+                      h('label', { className: 'bf-tpl-field' }, '角色',
+                        h('select', { className: 'bf-select bf-input-sm', value: currentConfig.role, onChange: function (event) { patchConfig(current, { role: event.target.value }) } },
+                          h('option', { value: 'primary' }, '主队列'),
+                          h('option', { value: 'supplementary' }, '补充队列'))),
+                      h('label', { className: 'bf-tpl-field' }, '是否纳入',
+                        h('select', { className: 'bf-select bf-input-sm', value: currentConfig.include ? 'yes' : 'no', onChange: function (event) { patchConfig(current, { include: event.target.value === 'yes' }) } },
+                          h('option', { value: 'yes' }, '纳入'),
+                          h('option', { value: 'no' }, '排除')))),
+                    h('div', { className: 'bf-joint-title' }, '样本（前 12 行）'),
+                    h('div', { className: 'bf-clinical-hit-meta bf-muted' }, asArray(currentConfig.dataset && currentConfig.dataset.design && currentConfig.dataset.design.samples).slice(0, 12).map(function (sample, index) {
+                      return h('span', { key: index }, asText(sample.sample_id, '') + '/' + asText(sample.group, '-'))
+                    }))))),
+          h('div', { className: 'bf-joint-actions' },
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { setStep(1) } }, '上一步'),
+            h('div', { className: 'bf-spacer' }),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: !usable.length, onClick: function () { setStep(3) } }, '下一步：总结（' + usable.length + '）')))
+
+        : h('div', { className: 'bf-wizard-body' },
+          h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '已选数据集与提案'),
+            h('div', { className: 'bf-joint-list' }, usable.map(function (item) {
+              var cfg = config[item.datasetId] || {}
+              return h('div', { key: item.key, className: 'bf-clinical-hit' },
+                h('div', { className: 'bf-clinical-hit-title' },
+                  h('span', { className: 'bf-mono' }, item.datasetId),
+                  h('span', { className: 'bf-muted' }, ' · n=' + asText(item.candidate && item.candidate.n_samples, '?') + ' · 分组 ' + asArray(cfg.groups).join('/') + ' · ' + asText(cfg.caseGroup, '?') + ' vs ' + asText(cfg.controlGroup, '?'))))
+            }))),
+          usable.length >= 2 ? h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '这些数据集怎么用？'),
+            h('div', { className: 'bf-joint-actions' },
+              h('label', { className: 'bf-joint-field' }, h('input', { type: 'radio', checked: mergeMode === 'joint', onChange: function () { setMergeMode('joint') } }), '联合（先 harmonize 合并，再在合并数据集上跑）'),
+              h('label', { className: 'bf-joint-field' }, h('input', { type: 'radio', checked: mergeMode === 'separate', onChange: function () { setMergeMode('separate') } }), '单独（各自跑，后续 meta 合并）'),
+              mergeMode === 'joint' ? h('label', { className: 'bf-joint-field' }, '批次方法',
+                h('select', { className: 'bf-select bf-input-sm', value: method, onChange: function (event) { setMethod(event.target.value) } },
+                  ['quantile', 'combat', 'scale_only', 'none'].map(function (item) { return h('option', { key: item, value: item }, item) }))) : null)) : null,
+          h('div', { className: 'bf-joint-section' },
+            h('div', { className: 'bf-joint-title' }, '执行前检查'),
+            h('div', { className: 'bf-logic-preview' },
+              h('div', null, '模板：' + templateForKind(usable[0] && usable[0].candidate && usable[0].candidate.kind)),
+              h('div', null, '对照：' + asText(usable[0] && (config[usable[0].datasetId] || {}).caseGroup, '?') + ' vs ' + asText(usable[0] && (config[usable[0].datasetId] || {}).controlGroup, '?')),
+              h('div', null, '预计产物：manifest / design / qc / results/*.tsv / figures / evidence / methods'),
+              h('div', null, '闸门：每组独立 n≥2；尺度需 verified；分组不能与批次完全共线'))),
+          h('div', { className: 'bf-joint-actions' },
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { setStep(2) } }, '上一步'),
+            h('div', { className: 'bf-spacer' }),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: Boolean(busy), onClick: execute },
+              h(Icon, { name: 'send', size: 11 }), busy ? '处理中…' : mergeMode === 'joint' && usable.length >= 2 ? '合并并生成计划' : '生成计划'))))
     }
 
     // ----------------------------------------------------------------------
@@ -4394,13 +5195,25 @@
           h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: busy === 'joint', onClick: runJoint },
             h(Icon, { name: 'flow', size: 11 }), busy === 'joint' ? '合并中…' : '运行联合分析')))
 
+      var mergedId = result && result.data ? asText(result.data.merged_dataset_id, '') : ''
       var resultBlock = result
         ? h('div', { className: 'bf-joint-result' },
           h('b', null, result.kind === 'harmonize' ? '归一化已提交：' : '联合分析已提交：'),
           h('span', { className: 'bf-mono' }, asText(result.data && result.data.run_id, '?')),
           h('span', { className: 'bf-muted' }, ' · ' + asText(result.data && result.data.status, '')),
+          mergedId ? h('span', { className: 'bf-tone-ok' }, ' · 合并数据集 ' + mergedId) : null,
           (result.data && result.data.cross_dataset_inference_allowed === false)
             ? h('span', { className: 'bf-tone-warn' }, ' · 未校正，禁止合并推断')
+            : null,
+          mergedId
+            ? h('button', {
+              type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary',
+              title: '用合并后的数据集继续跑差异/组成分析',
+              onClick: function () {
+                if (props.onCompose) props.onCompose('用合并数据集 ' + mergedId + ' 按 tumor vs normal 做差异表达并做通路富集，出图')
+                if (props.onBackToWish) props.onBackToWish()
+              },
+            }, h(Icon, { name: 'send', size: 11 }), '用合并数据集继续跑')
             : null)
         : null
 
@@ -4514,6 +5327,7 @@
             var hash = String(window.location.hash || '')
             if (hash.indexOf('/clinical') >= 0 || hash.indexOf('/question') >= 0) return 'clinical'
             if (hash.indexOf('/guided') >= 0) return 'guided'
+            if (hash.indexOf('/wizard') >= 0) return 'wizard'
             if (hash.indexOf('/logic') >= 0) return 'logic'
           }
         } catch (error) { /* ignore */ }
@@ -4525,11 +5339,14 @@
         setPage(next)
         try {
           if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
-            window.history.replaceState(null, '', next === 'logic' ? '#/logic' : next === 'guided' ? '#/guided' : next === 'clinical' ? '#/question' : '#/')
+            window.history.replaceState(null, '', next === 'logic' ? '#/logic' : next === 'guided' ? '#/guided' : next === 'clinical' ? '#/question' : next === 'wizard' ? '#/wizard' : '#/')
           }
         } catch (error) { /* ignore */ }
       }
 
+      var pickerState = useState({ open: false, options: [], auto: false })
+      var picker = pickerState[0]
+      var setPicker = pickerState[1]
       var settingsState = useState({ output_dir: null, draft: null, saving: false })
       var settings = settingsState[0]
       var setSettings = settingsState[1]
@@ -4596,6 +5413,13 @@
           setSettings(function (previous) { return Object.assign({}, previous, { output_dir: output, draft: output }) })
         }).catch(function () { /* 设置读取失败不阻塞页面 */ })
       }, [])
+
+      function pickDataset(datasetId) {
+        setPicker(function (previous) { return Object.assign({}, previous, { open: false }) })
+        var nextEdits = Object.assign({}, editsRef.current || {}, { dataset: datasetId })
+        setEdits(nextEdits)
+        if (lastQueryRef.current) runAsk(lastQueryRef.current, nextEdits, { silent: true })
+      }
 
       function saveOutputDir() {
         setSettings(function (previous) { return Object.assign({}, previous, { saving: true }) })
@@ -4840,6 +5664,9 @@
           if (askSeqRef.current !== seq) return
           var normalized = normalizeAsk(result)
           setDraft(normalized)
+          var options = asArray(result && result.dataset_options)
+          var autoSelected = Boolean(result && result.dataset_match && result.dataset_match.auto_selected)
+          setPicker({ open: Boolean(autoSelected && options.length), options: options, auto: autoSelected })
           setAsking(false)
           setSyncing(false)
           setAskError(null)
@@ -5285,7 +6112,8 @@
         h('div', { className: 'bf-top-group', style: { marginRight: 'auto' } },
           h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { gotoPage('workbench') }, 'aria-pressed': page === 'workbench' ? 'true' : 'false' }, h(Icon, { name: 'chat', size: 11 }), '许愿'),
           h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { gotoPage('guided') }, 'aria-pressed': page === 'guided' ? 'true' : 'false' }, h(Icon, { name: 'flow', size: 11 }), '疾病引导'),
-          h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { gotoPage('clinical') }, 'aria-pressed': page === 'clinical' ? 'true' : 'false' }, h(Icon, { name: 'search', size: 11 }), '问题入手')),
+          h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { gotoPage('clinical') }, 'aria-pressed': page === 'clinical' ? 'true' : 'false' }, h(Icon, { name: 'search', size: 11 }), '问题入手'),
+          h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { gotoPage('wizard') }, 'aria-pressed': page === 'wizard' ? 'true' : 'false' }, h(Icon, { name: 'download', size: 11 }), '数据向导')),
         page === 'logic'
           ? h(LogicPage, {
             dataRoot: dataRoot,
@@ -5295,6 +6123,7 @@
           })
           : page === 'guided'
             ? h(GuidedPage, {
+              api: api,
               onBack: function () { gotoPage('workbench') },
               onQuestion: function (disease) { setAskText(''); gotoPage('clinical') },
               onCompose: function (text) { setAskText(text); gotoPage('workbench') },
@@ -5307,7 +6136,14 @@
                 onCompose: function (text) { setAskText(text); gotoPage('workbench') },
                 onLogic: function () { gotoPage('logic') },
               })
-              : h('div', { className: 'bf-body' },
+              : page === 'wizard'
+                ? h(DataWizard, {
+                  api: api,
+                  seedText: askText,
+                  onBack: function () { gotoPage('workbench') },
+                  onCompose: function (text) { setAskText(text); gotoPage('workbench') },
+                })
+                : h('div', { className: 'bf-body' },
           h(ChatColumn, {
             messages: messages, text: askText, onTextChange: setAskText, onSend: handleSend, asking: asking,
             onCompose: function (composed) { setAskText(composed) },
@@ -5342,6 +6178,12 @@
               onSaveOutputDir: saveOutputDir,
               onExport: exportRun,
             }),
+            picker.options.length
+              ? h('div', { className: 'bf-joint-actions', style: { flex: 'none' } },
+                h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { setPicker(function (previous) { return Object.assign({}, previous, { open: true }) }) } },
+                  h(Icon, { name: 'list', size: 11 }), '候选数据集（' + picker.options.length + '，中文摘要）'),
+                h('span', { className: 'bf-composer-hint' }, picker.auto ? '话里没点名数据集，系统已先替你选；点开可换' : '可随时换数据集'))
+              : null,
             h(PlanCard, {
               draft: draft, edits: edits, asking: asking, syncing: syncing,
               templates: templates, statusSuggestion: status ? status.suggest : '',
@@ -5371,6 +6213,8 @@
             h(WorkspaceTabs, {
               api: api,
               onRefreshRuns: loadRuns,
+              onCompose: function (text) { setAskText(text) },
+              onBackToWish: function () { gotoPage('workbench') },
               artifacts: {
                 runId: selectedRunId, runStatus: selectedRunView, dataRoot: dataRoot,
                 manifest: currentManifest, evidence: currentEvidence,
@@ -5402,6 +6246,13 @@
               },
             }))),
 
+        h(DatasetPickerModal, {
+          open: picker.open,
+          options: picker.options,
+          currentId: draft && draft.fields ? draft.fields.dataset : null,
+          onPick: pickDataset,
+          onClose: function () { setPicker(function (previous) { return Object.assign({}, previous, { open: false }) }) },
+        }),
         h(Drawer, {
           drawer: drawer, onClose: closeDrawer, onCopy: handleCopy, dataRoot: dataRoot,
           evidenceFilter: evidenceFilter, onEvidenceFilter: setEvidenceFilter,
