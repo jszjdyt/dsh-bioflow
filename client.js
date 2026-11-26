@@ -1861,7 +1861,7 @@
     '@media (max-width:760px){.bf-field{grid-template-columns:minmax(0,1fr)}.bf-top{padding:8px 10px}.bf-body{padding:8px;gap:8px}.bf-env{max-width:80vw}}',
   ]
 
-  var BF_UI_BUILD = 'UI 0.2.4 · 2026-11-26 16:55'
+  var BF_UI_BUILD = 'UI 0.2.5 · 2026-11-26 16:42'
 
   var CSS_TEXT = CSS_LINES.join('\n')
 
@@ -2799,7 +2799,11 @@
               h('button', { type: 'button', className: 'bf-chip', onClick: function () { if (props.onNavigate) props.onNavigate('wizard') } }, '我有数据'),
               h('button', { type: 'button', className: 'bf-chip', onClick: function () { if (props.onNavigate) props.onNavigate('guided') } }, '我只有方向'),
               h('button', { type: 'button', className: 'bf-chip', onClick: function () { props.onCompose('帮我找公共数据：先给候选队列和中文摘要，说明每个队列能回答什么、缺什么，再让我挑') } }, '帮我找数据'),
-              h('button', { type: 'button', className: 'bf-chip', onClick: function () { setFigureOpen(true) } }, '照着图来')),
+              h('button', { type: 'button', className: 'bf-chip', onClick: function () { setFigureOpen(true) } }, '照着图来'),
+              h('button', {
+                type: 'button', className: 'bf-chip bf-chip-on',
+                onClick: function () { setFigureMode('paper'); setFigureOpen(true) },
+              }, '论文 PDF / 图片')),
             figureOpen ? h(Overlay, {
               label: '照着图来', onClose: function () { setFigureOpen(false) },
             },
@@ -2824,7 +2828,13 @@
                       h('div', { className: 'bf-joint-actions' },
                         h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: function (event) { if (event && event.stopPropagation) event.stopPropagation(); pick() } }, '用这个图型'),
                         h('span', { className: 'bf-composer-hint' }, '点击后自动填进许愿框')))
-                  }))
+                  }).concat([
+                    h('div', { key: 'upload-paper', className: 'bf-clinical-hit', style: { cursor: 'pointer' }, onClick: function () { setFigureMode('paper') } },
+                      h('div', { className: 'bf-clinical-hit-title' }, '没有现成的图？上传论文 PDF / 截图'),
+                      h('div', { className: 'bf-clinical-hit-meta bf-muted' }, '拖 PDF 或图片进来，多模态识别图型后直接给复现许愿'),
+                      h('div', { className: 'bf-joint-actions' },
+                        h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: function (event) { if (event && event.stopPropagation) event.stopPropagation(); setFigureMode('paper') } }, '去上传 PDF / 图片')))
+                  ]))
                   : h(PaperFigurePanel, {
                     api: props.api,
                     defaultMode: 'pdf',
