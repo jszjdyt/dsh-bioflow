@@ -20,6 +20,10 @@
 返回图型、横纵轴、分组/颜色、图里能看到的统计信息、需要的数据与可执行许愿；图片保存在 `<数据根>/uploads/figures/` 留痕。
 模型不支持图片输入时会明确报 `unsupported`，不会退化成瞎猜。
 
+**整篇 PDF（上传/拖拽）**：`paper_pdf` 接 PDF 上传（UI 支持拖拽或选文件），用 PyMuPDF 抽每页图注 + 内嵌位图
+（带页码与 bbox，抽出的图保存到 `uploads/figures/`），并对前几张图跑多模态识别；矢量图/扫描版抽不到位图时
+退化为图注拆解并写明原因。实测 2.6 MB、13 页论文 → 8 张图（图注+图+多模态描述）。
+
 说明：图注拆解只读文字；`unknown` 一律如实返回，不硬编。CLI：
 `node bin/bioflow.mjs paper-figures --paper-pmid=<PMID>` 或 `--figure-caption="Figure 2. Kaplan-Meier …"`。
 
@@ -29,14 +33,14 @@
 
 | 入口 | 形态 | 说明 |
 |---|---|---|
-| **`bioflow` agent 工具** | 对话里调用 | 29 个 action，和页面按钮、CLI 共用同一份 `lib/impl.mjs` |
+| **`bioflow` agent 工具** | 对话里调用 | 30 个 action，和页面按钮、CLI 共用同一份 `lib/impl.mjs` |
 | **`bioflow` CLI** | `bin/bioflow.mjs` | 同一套函数、同一份数据根，适合脚本与排查 |
 | **HTTP 路由** | `/bioflow/*` | `dispatch` / `catalog` / `status` / `health` / `figures/<run_id>/<file>` / `files/<rel>` |
 | **左侧栏整页 UI** | 淡蓝/天蓝科幻风 | 「许愿式生物信息分析」整页：左栏许愿、中栏计划与流水线、右栏数据源/下载/产物证据；规格见仓库根 [`BIOFLOW_UI_SPEC.md`](../../BIOFLOW_UI_SPEC.md) |
 
 > 浏览器侧入口文件是 `client.js`（`package.json` 的 `exports["./client"]` 指向它）。当前 checkout 若还没包含 `client.js`，工具与 CLI 覆盖全部能力，只差那一层页面壳。
 
-`bioflow` 工具的 29 个 action，一句话版：
+`bioflow` 工具的 30 个 action，一句话版：
 
 | action | 一句话 |
 |---|---|
@@ -134,7 +138,7 @@ node plugins/dsh-bioflow/bin/bioflow.mjs run_status --run-id=<run_id>
 node plugins/dsh-bioflow/bin/bioflow.mjs audit --json
 ```
 
-CLI 子命令就是 action 名（`run_status` 和 `run-status` 两种写法都认，内部统一转下划线；`node plugins/dsh-bioflow/bin/bioflow.mjs help` 看用法）：`status | templates | search | source_detail | health | download | register | datasets | ask | advise | topics | paper_figures | figure_from_image | plan | submit | runs | run_status | cancel | export | evidence | methods | audit | suggest | suggest_next | harmonize | joint | delete | trash | settings`。退出码：`0` 成功；`2` 被闸门拦下或执行失败（stdout/stderr 里带原因）。
+CLI 子命令就是 action 名（`run_status` 和 `run-status` 两种写法都认，内部统一转下划线；`node plugins/dsh-bioflow/bin/bioflow.mjs help` 看用法）：`status | templates | search | source_detail | health | download | register | datasets | ask | advise | topics | paper_figures | figure_from_image | paper_pdf | plan | submit | runs | run_status | cancel | export | evidence | methods | audit | suggest | suggest_next | harmonize | joint | delete | trash | settings`。退出码：`0` 成功；`2` 被闸门拦下或执行失败（stdout/stderr 里带原因）。
 
 ### ③ 页面（左侧栏整页）
 

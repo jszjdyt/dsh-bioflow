@@ -1682,6 +1682,9 @@
     '.bf-modal-card{display:flex;flex-direction:column;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 64px);border:1px solid var(--bf-line);border-radius:18px;background:linear-gradient(180deg,#FFFFFF,rgba(246,252,255,.98));box-shadow:0 40px 90px -50px rgba(8,60,96,.7);overflow:hidden}',
     '.bf-modal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--bf-line)}',
     '.bf-modal-body{display:flex;flex-direction:column;gap:8px;padding:12px 14px;overflow-y:auto}',
+    '.bf-paperfig{display:flex;flex-direction:column;gap:8px}',
+    '.bf-paperfig-drag .bf-dropzone{border-color:var(--bf-accent);background:color-mix(in srgb,var(--bf-accent) 8%,#fff)}',
+    '.bf-dropzone{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px dashed color-mix(in srgb,var(--bf-line) 90%,var(--bf-accent));border-radius:10px;font-size:12px;color:var(--bf-ink-2);background:rgba(255,255,255,.6)}',
     '.bf-starters{margin-bottom:2px}',
     '.bf-health{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:10px;font-size:11.5px;border:1px solid var(--bf-line);background:rgba(255,255,255,.75)}',
     '.bf-health-dot{width:9px;height:9px;border-radius:50%;flex:none;background:currentColor;box-shadow:0 0 8px currentColor}',
@@ -2582,12 +2585,52 @@
       var result = resultState[0]
       var setResult = resultState[1]
 
-      function dispatch(body) {
+      var draggingState = useState(false)
+      var dragging = draggingState[0]
+      var setDragging = draggingState[1]
+      function dispatchAction(action, body) {
         if (!api) return
         setResult({ loading: true, error: null, data: null })
-        api.dispatch(Object.assign({ action: 'paper_figures', limit: 10 }, body)).then(function (data) {
+        api.dispatch(Object.assign({ action: action, limit: 10 }, body)).then(function (data) {
           setResult({ loading: false, error: null, data: data })
         }).catch(function (problem) { setResult({ loading: false, error: problem, data: null }) })
+      }
+      function dispatch(body) { dispatchAction('paper_figures', body) }
+      function handleFiles(fileList) {
+        var files = Array.prototype.slice.call(fileList || [])
+        if (!files.length) return
+        var file = files[0]
+        var isPdf = /pdf$/i.test(file.type || '') || /\.pdf$/i.test(file.name || '')
+        var reader = new FileReader()
+        if (isPdf) {
+          if (file.size > 80 * 1024 * 1024) {
+            setResult({ loading: false, error: { message: 'PDF 超过 80 MB，请拆分后再上传' }, data: null })
+            return
+          }
+          reader.onload = function () { dispatchAction('paper_pdf', { pdf_base64: String(reader.result || ''), pdf_name: file.name }) }
+        } else if (/^image\//i.test(file.type || '') || /\.(png|jpe?g|webp)$/i.test(file.name || '')) {
+          if (file.size > 12 * 1024 * 1024) {
+            setResult({ loading: false, error: { message: '图片超过 12 MB，请压缩后再上传' }, data: null })
+            return
+          }
+          reader.onload = function () {
+            dispatchAction('figure_from_image', {
+              image_base64: String(reader.result || ''), image_name: file.name,
+              figure_caption: asText(caption, '').trim() || undefined,
+            })
+          }
+        } else {
+          setResult({ loading: false, error: { message: '只支持 PDF 与 PNG/JPEG/WebP 图片' }, data: null })
+          return
+        }
+        reader.onerror = function () { setResult({ loading: false, error: { message: '读取文件失败' }, data: null }) }
+        reader.readAsDataURL(file)
+      }
+      function onDropFiles(event) {
+        if (event && event.preventDefault) event.preventDefault()
+        setDragging(false)
+        var files = event && event.dataTransfer ? event.dataTransfer.files : null
+        if (files && files.length) handleFiles(files)
       }
       function runFromInput() {
         var value = asText(input, '').trim()
@@ -2618,17 +2661,34 @@
       }
       var figures = asArray(result.data && result.data.figures)
       var dataFailed = result.data && result.data.ok === false
-      return h('div', { className: 'bf-paperfig' },
+      return h('div', {
+        className: 'bf-paperfig' + (dragging ? ' bf-paperfig-drag' : ''),
+        onDragOver: function (event) { if (event && event.preventDefault) event.preventDefault(); setDragging(true) },
+        onDragLeave: function () { setDragging(false) },
+        onDrop: onDropFiles,
+      },
+        h('div', { className: 'bf-dropzone' },
+          h(Icon, { name: 'upload', size: 13 }),
+          h('span', null, '把论文 PDF 或图片直接拖到这里（也可以点下面的按钮选择）'),
+          dragging ? h('b', { className: 'bf-tone-ok' }, '松手即可') : null),
         h('div', { className: 'bf-chips' },
           h('span', { className: 'bf-composer-hint' }, '来源'),
-          [['image', '上传图片'], ['pmid', 'PMID'], ['doi', 'DOI'], ['path', '本地 PDF 路径']].map(function (item) {
+          [['pdf', '上传 PDF'], ['image', '上传图片'], ['pmid', 'PMID'], ['doi', 'DOI'], ['path', '本地 PDF 路径']].map(function (item) {
             return h('button', {
               key: item[0], type: 'button',
               className: 'bf-chip' + (mode === item[0] ? ' bf-chip-on' : ''),
               onClick: function () { setMode(item[0]) },
             }, item[1])
           })),
-        mode === 'image'
+        mode === 'pdf'
+          ? h('div', { className: 'bf-row' },
+            h('input', {
+              type: 'file', accept: 'application/pdf,.pdf', className: 'bf-input bf-input-sm',
+              style: { flex: '1 1 240px' },
+              onChange: function (event) { handleFiles(event && event.target ? event.target.files : null) },
+            }),
+            h('span', { className: 'bf-composer-hint' }, '自动抽图注 + 内嵌图，并对前几张图做多模态识别'))
+          : mode === 'image'
           ? h('div', { className: 'bf-row' },
             h('input', {
               type: 'file', accept: 'image/png,image/jpeg,image/webp', className: 'bf-input bf-input-sm',
@@ -2671,7 +2731,13 @@
                 figure.plotlab_chart ? h('span', { className: 'bf-muted' }, ' · plotlab: ' + figure.plotlab_chart) : null,
                 figure.template ? h('span', { className: 'bf-muted' }, ' · 模板 ' + figure.template) : null,
                 figure.confidence !== undefined ? h('span', { className: 'bf-muted' }, ' · conf ' + figure.confidence) : null),
-              h('div', { className: 'bf-clinical-hit-meta bf-muted' }, asText(figure.caption, '').slice(0, 260)),
+              figure.image_url ? h('img', {
+                src: figure.image_url, alt: asText(figure.label, 'figure'),
+                style: { maxWidth: '100%', maxHeight: '180px', borderRadius: '8px', border: '1px solid var(--bf-line)', margin: '4px 0' },
+              }) : null,
+              h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                figure.page ? '第 ' + figure.page + ' 页 · ' : '',
+                asText(figure.caption, '').slice(0, 260)),
               h('div', { className: 'bf-clinical-hit-meta bf-muted' }, '需要：' + asText(figure.need_data, '—')),
               h('div', { className: 'bf-joint-actions' },
                 h('button', {
@@ -6711,6 +6777,7 @@
           EvidenceList: EvidenceList,
           FiguresGrid: FiguresGrid,
           SidebarIcon: SidebarIcon,
+          PaperFigurePanel: PaperFigurePanel,
         },
       }),
     }
