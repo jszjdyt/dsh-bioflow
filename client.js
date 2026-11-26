@@ -1553,7 +1553,7 @@
     '.bf-main{display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:2px}',
     '.bf-right{display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:2px}',
     /* 面板：1px 发光顶线 + 8×8 网格底纹（SPEC §1 科幻感三件事之二） */
-    '.bf-panel{position:relative;display:flex;flex-direction:column;min-height:0;border:1px solid var(--bf-line);border-radius:var(--bf-radius);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.82));backdrop-filter:blur(14px) saturate(1.05);box-shadow:var(--bf-shadow);overflow:hidden}',
+    '.bf-panel{position:relative;display:flex;flex-direction:column;min-height:0;border:1px solid var(--bf-line);border-radius:var(--bf-radius);background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(255,255,255,.9));box-shadow:var(--bf-shadow);overflow:hidden}',
     '.bf-panel::before{content:"";position:absolute;left:18px;right:18px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--bf-accent-3) 22%,var(--bf-accent-2) 50%,var(--bf-accent-3) 78%,transparent);opacity:.9;pointer-events:none}',
     '.bf-panel-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;padding:11px 14px 9px;border-bottom:1px solid color-mix(in srgb,var(--bf-line) 70%,transparent);background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,0))}',
     '.bf-panel-title{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:.06em;color:var(--bf-ink-1)}',
@@ -1861,7 +1861,7 @@
     '@media (max-width:760px){.bf-field{grid-template-columns:minmax(0,1fr)}.bf-top{padding:8px 10px}.bf-body{padding:8px;gap:8px}.bf-env{max-width:80vw}}',
   ]
 
-  var BF_UI_BUILD = 'UI 0.2.7 · 2026-11-26 16:50'
+  var BF_UI_BUILD = 'UI 0.2.8 · 2026-11-26 16:58'
 
   var CSS_TEXT = CSS_LINES.join('\n')
 
@@ -2713,9 +2713,12 @@
         onDragLeave: function () { setDragging(false) },
         onDrop: onDropFiles,
       },
-        h('div', { className: 'bf-dropzone' },
+        h('label', {
+          className: 'bf-dropzone', htmlFor: 'bf-paper-file',
+          style: { cursor: 'pointer' }, title: '点这里选择文件',
+        },
           h(Icon, { name: 'upload', size: 13 }),
-          h('span', null, '把论文 PDF / 图片拖到这里，或点下面选择；截图可直接 ⌘V 粘贴'),
+          h('span', null, '把论文 PDF / 图片拖到这里，或点这里选择；截图可直接 ⌘V 粘贴'),
           dragging ? h('b', { className: 'bf-tone-ok' }, '松手即可') : null),
         h('div', { className: 'bf-chips' },
           h('span', { className: 'bf-composer-hint' }, '来源'),
@@ -2729,11 +2732,12 @@
         mode === 'pdf'
           ? h('div', { className: 'bf-row' },
             h('input', {
+              id: 'bf-paper-file',
               type: 'file', accept: 'application/pdf,.pdf', className: 'bf-input bf-input-sm',
               style: { flex: '1 1 240px' },
               onChange: function (event) { handleFiles(event && event.target ? event.target.files : null) },
             }),
-            h('span', { className: 'bf-composer-hint' }, '自动抽图注 + 内嵌图，并对前几张图做多模态识别'))
+            h('span', { className: 'bf-composer-hint' }, '选完自动开始识别：抽图注 + 内嵌图，前几张图走多模态'))
           : mode === 'image'
           ? h('div', { className: 'bf-row' },
             h('input', {
