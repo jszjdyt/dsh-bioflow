@@ -1861,7 +1861,7 @@
     '@media (max-width:760px){.bf-field{grid-template-columns:minmax(0,1fr)}.bf-top{padding:8px 10px}.bf-body{padding:8px;gap:8px}.bf-env{max-width:80vw}}',
   ]
 
-  var BF_UI_BUILD = 'UI 0.2.5 · 2026-11-26 16:42'
+  var BF_UI_BUILD = 'UI 0.2.6 · 2026-11-26 16:45'
 
   var CSS_TEXT = CSS_LINES.join('\n')
 
@@ -2634,6 +2634,50 @@
         var files = event && event.dataTransfer ? event.dataTransfer.files : null
         if (files && files.length) handleFiles(files)
       }
+      // 宿主（Electron/聊天输入框）可能全局拦截文件拖放 → 在 window 捕获阶段接管。
+      React.useEffect(function () {
+        if (typeof window === 'undefined' || !window.addEventListener) return undefined
+        function dragOver(event) {
+          var types = event.dataTransfer && event.dataTransfer.types ? Array.prototype.slice.call(event.dataTransfer.types) : []
+          if (types.indexOf('Files') < 0) return
+          if (event.preventDefault) event.preventDefault()
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+          setDragging(true)
+        }
+        function dragLeave(event) {
+          if (!event || event.relatedTarget === null) setDragging(false)
+        }
+        function drop(event) {
+          var files = event && event.dataTransfer ? event.dataTransfer.files : null
+          if (!files || !files.length) { setDragging(false); return }
+          if (event.preventDefault) event.preventDefault()
+          if (event.stopPropagation) event.stopPropagation()
+          setDragging(false)
+          handleFiles(files)
+        }
+        function paste(event) {
+          var items = event && event.clipboardData && event.clipboardData.items ? event.clipboardData.items : null
+          if (!items) return
+          var files = []
+          for (var i = 0; i < items.length; i += 1) {
+            var item = items[i]
+            if (item.kind !== 'file') continue
+            var file = item.getAsFile()
+            if (file) files.push(file)
+          }
+          if (files.length) { event.preventDefault(); handleFiles(files) }
+        }
+        window.addEventListener('dragover', dragOver, true)
+        window.addEventListener('dragleave', dragLeave, true)
+        window.addEventListener('drop', drop, true)
+        window.addEventListener('paste', paste, true)
+        return function () {
+          window.removeEventListener('dragover', dragOver, true)
+          window.removeEventListener('dragleave', dragLeave, true)
+          window.removeEventListener('drop', drop, true)
+          window.removeEventListener('paste', paste, true)
+        }
+      }, [])
       function runFromInput() {
         var value = asText(input, '').trim()
         if (!value) return
@@ -2671,7 +2715,7 @@
       },
         h('div', { className: 'bf-dropzone' },
           h(Icon, { name: 'upload', size: 13 }),
-          h('span', null, '把论文 PDF 或图片直接拖到这里（也可以点下面的按钮选择）'),
+          h('span', null, '把论文 PDF / 图片拖到这里，或点下面选择；截图可直接 ⌘V 粘贴'),
           dragging ? h('b', { className: 'bf-tone-ok' }, '松手即可') : null),
         h('div', { className: 'bf-chips' },
           h('span', { className: 'bf-composer-hint' }, '来源'),
@@ -2710,7 +2754,7 @@
         h('div', { className: 'bf-composer-hint', style: { marginTop: '6px' } }, '或者直接粘贴图注（不联网、最准）：'),
         h('div', { className: 'bf-row', style: { alignItems: 'flex-start' } },
           h('textarea', {
-            className: 'bf-input bf-input-sm', rows: 3, style: { flex: '1 1 240px', resize: 'vertical' },
+            className: 'bf-input bf-input-sm', rows: 4, style: { flex: '1 1 240px', resize: 'both', minHeight: '72px' },
             value: caption, placeholder: 'Figure 2. Kaplan-Meier survival curves of overall survival in gastric cancer (log-rank P=0.01)…',
             onChange: function (event) { setCaption(event.target.value) },
           }),
@@ -2761,7 +2805,8 @@
         onClick: function (event) { if (props.onClose) props.onClose(event) },
       }, h('div', {
         style: {
-          width: 'min(820px, 100%)', maxHeight: 'calc(100vh - 48px)', overflow: 'auto',
+          width: 'min(860px, 100%)', maxHeight: 'calc(100vh - 48px)', overflow: 'auto',
+          resize: 'both', minWidth: '420px', minHeight: '300px',
           background: '#fff', borderRadius: '18px', border: '1px solid var(--bf-line)',
           boxShadow: '0 40px 90px -50px rgba(8,60,96,.7)',
         },
