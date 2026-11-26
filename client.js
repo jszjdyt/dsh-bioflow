@@ -1861,7 +1861,7 @@
     '@media (max-width:760px){.bf-field{grid-template-columns:minmax(0,1fr)}.bf-top{padding:8px 10px}.bf-body{padding:8px;gap:8px}.bf-env{max-width:80vw}}',
   ]
 
-  var BF_UI_BUILD = 'UI 0.2.3 · 2026-11-26 16:35'
+  var BF_UI_BUILD = 'UI 0.2.4 · 2026-11-26 16:55'
 
   var CSS_TEXT = CSS_LINES.join('\n')
 
@@ -2827,6 +2827,7 @@
                   }))
                   : h(PaperFigurePanel, {
                     api: props.api,
+                    defaultMode: 'pdf',
                     onCompose: props.onCompose,
                     onClose: function () { setFigureOpen(false) },
                   })),
