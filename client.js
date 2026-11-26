@@ -2601,27 +2601,50 @@
         if (!value) return
         dispatch({ figure_caption: value })
       }
+      function runFromImageFile(event) {
+        var file = event && event.target && event.target.files ? event.target.files[0] : null
+        if (!file) return
+        if (file.size > 12 * 1024 * 1024) {
+          setResult({ loading: false, error: { message: '图片超过 12 MB，请压缩后再上传' }, data: null })
+          return
+        }
+        var reader = new FileReader()
+        reader.onload = function () {
+          var dataUrl = String(reader.result || '')
+          dispatch({ image_base64: dataUrl, image_name: file.name, figure_caption: asText(caption, '').trim() || undefined })
+        }
+        reader.onerror = function () { setResult({ loading: false, error: { message: '读取图片失败' }, data: null }) }
+        reader.readAsDataURL(file)
+      }
       var figures = asArray(result.data && result.data.figures)
+      var dataFailed = result.data && result.data.ok === false
       return h('div', { className: 'bf-paperfig' },
         h('div', { className: 'bf-chips' },
           h('span', { className: 'bf-composer-hint' }, '来源'),
-          [['pmid', 'PMID'], ['doi', 'DOI'], ['path', '本地 PDF 路径']].map(function (item) {
+          [['image', '上传图片'], ['pmid', 'PMID'], ['doi', 'DOI'], ['path', '本地 PDF 路径']].map(function (item) {
             return h('button', {
               key: item[0], type: 'button',
               className: 'bf-chip' + (mode === item[0] ? ' bf-chip-on' : ''),
               onClick: function () { setMode(item[0]) },
             }, item[1])
           })),
-        h('div', { className: 'bf-row' },
-          h('input', {
-            className: 'bf-input bf-input-sm', style: { flex: '1 1 240px' },
-            value: input,
-            placeholder: mode === 'path' ? '/abs/path/paper.pdf' : mode === 'doi' ? '10.1038/s41586-...' : 'PMID（需 PMC 开放全文，如 24089192）',
-            onChange: function (event) { setInput(event.target.value) },
-            onKeyDown: function (event) { if (isImeComposing(event)) return; if (event.key === 'Enter') runFromInput() },
-          }),
-          h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: result.loading, onClick: runFromInput },
-            h(Icon, { name: 'search', size: 11 }), result.loading ? '拆解中…' : '从论文拆图')),
+        mode === 'image'
+          ? h('div', { className: 'bf-row' },
+            h('input', {
+              type: 'file', accept: 'image/png,image/jpeg,image/webp', className: 'bf-input bf-input-sm',
+              style: { flex: '1 1 240px' }, onChange: runFromImageFile,
+            }),
+            h('span', { className: 'bf-composer-hint' }, '交给宿主多模态模型看图（当前模型需支持图片输入）；可先在下面补图注提高准确率'))
+          : h('div', { className: 'bf-row' },
+            h('input', {
+              className: 'bf-input bf-input-sm', style: { flex: '1 1 240px' },
+              value: input,
+              placeholder: mode === 'path' ? '/abs/path/paper.pdf' : mode === 'doi' ? '10.1038/s41586-...' : 'PMID（需 PMC 开放全文，如 24089192）',
+              onChange: function (event) { setInput(event.target.value) },
+              onKeyDown: function (event) { if (isImeComposing(event)) return; if (event.key === 'Enter') runFromInput() },
+            }),
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: result.loading, onClick: runFromInput },
+              h(Icon, { name: 'search', size: 11 }), result.loading ? '拆解中…' : '从论文拆图')),
         h('div', { className: 'bf-composer-hint', style: { marginTop: '6px' } }, '或者直接粘贴图注（不联网、最准）：'),
         h('div', { className: 'bf-row', style: { alignItems: 'flex-start' } },
           h('textarea', {
@@ -2632,6 +2655,9 @@
           h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: result.loading, onClick: runFromCaption }, '识别图注')),
         result.loading ? h(Skeleton, { lines: 3 }) : null,
         result.error ? h('div', { className: 'bf-inline-error' }, '拆解失败：' + asText(result.error.message || result.error, '未知错误')) : null,
+        dataFailed ? h('div', { className: 'bf-inline-error' },
+          asText(result.data.message || '识别失败', '识别失败'),
+          result.data.next ? h('div', { className: 'bf-muted' }, '下一步：' + asText(result.data.next, '')) : null) : null,
         result.data && !figures.length
           ? h('div', { className: 'bf-inline-error' }, asText(result.data.summary, '没有拿到可用图注') + '（' + asArray(result.data.notes).join('；') + '）')
           : null,
@@ -2641,8 +2667,10 @@
               h('div', { className: 'bf-clinical-hit-title' },
                 h('span', { className: 'bf-mono' }, asText(figure.label, 'Figure')),
                 h('span', { className: 'bf-badge bf-badge-run' }, asText(figure.chart_label_zh, '未知图型')),
+                figure.recognized_by === 'vision' ? h('span', { className: 'bf-badge bf-badge-ok' }, '多模态识别') : null,
                 figure.plotlab_chart ? h('span', { className: 'bf-muted' }, ' · plotlab: ' + figure.plotlab_chart) : null,
-                figure.template ? h('span', { className: 'bf-muted' }, ' · 模板 ' + figure.template) : null),
+                figure.template ? h('span', { className: 'bf-muted' }, ' · 模板 ' + figure.template) : null,
+                figure.confidence !== undefined ? h('span', { className: 'bf-muted' }, ' · conf ' + figure.confidence) : null),
               h('div', { className: 'bf-clinical-hit-meta bf-muted' }, asText(figure.caption, '').slice(0, 260)),
               h('div', { className: 'bf-clinical-hit-meta bf-muted' }, '需要：' + asText(figure.need_data, '—')),
               h('div', { className: 'bf-joint-actions' },
