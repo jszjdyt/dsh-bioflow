@@ -153,6 +153,17 @@ test('CSS 守卫：包裹层（.bf-panel）不得含 filter/backdrop-filter/tran
   assert.ok(/Escape/.test(SOURCE), '弹层应支持 Esc 关闭')
 })
 
+test('CSS 守卫：整页允许上下滚动（不锁死一屏）', () => {
+  const rootRule = (SOURCE.match(/\.bf-root\{([^}]*)\}/) || [])[1] || ''
+  assert.ok(rootRule.includes('height:auto'), '.bf-root 应使用 height:auto，让页面按内容长高')
+  assert.ok(!/height:100%/.test(rootRule), '.bf-root 不应锁 height:100%')
+  assert.ok(/overflow-y:visible/.test(rootRule) || /overflow-y:auto/.test(rootRule), '.bf-root 应允许纵向滚动/溢出可见')
+  const bodyRule = (SOURCE.match(/\.bf-body\{([^}]*)\}/) || [])[1] || ''
+  assert.ok(!/overflow:hidden/.test(bodyRule), '.bf-body 不应 overflow:hidden（会裁掉内容并逼出内层滚动）')
+  const workRule = (SOURCE.match(/\.bf-work\{([^}]*)\}/) || [])[1] || ''
+  assert.ok(!/overflow-y:auto/.test(workRule), '.bf-work 不应自己滚动，交给整页滚动')
+})
+
 test('渲染树守卫：全页不存在嵌套 button，fixed 弹层不在包含块祖先里', async () => {
   const { components, harness } = await loadComponents()
   harness.resetCursor()
