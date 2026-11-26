@@ -2564,11 +2564,103 @@
       { id: 'umap', label: 'UMAP + Marker 点图', need: '我想做 UMAP 和 Marker 点图，需要单细胞数据并已有细胞类型注释；先给候选或导入入口' },
     ]
 
+    // ----------------------------------------------------------------------
+    // 从论文拆图：PMID / DOI / 本地 PDF / 粘贴图注 → 图注反推图型与许愿
+    // ----------------------------------------------------------------------
+    function PaperFigurePanel(props) {
+      var api = props.api
+      var modeState = useState('pmid')
+      var mode = modeState[0]
+      var setMode = modeState[1]
+      var inputState = useState('')
+      var input = inputState[0]
+      var setInput = inputState[1]
+      var captionState = useState('')
+      var caption = captionState[0]
+      var setCaption = captionState[1]
+      var resultState = useState({ loading: false, error: null, data: null })
+      var result = resultState[0]
+      var setResult = resultState[1]
+
+      function dispatch(body) {
+        if (!api) return
+        setResult({ loading: true, error: null, data: null })
+        api.dispatch(Object.assign({ action: 'paper_figures', limit: 10 }, body)).then(function (data) {
+          setResult({ loading: false, error: null, data: data })
+        }).catch(function (problem) { setResult({ loading: false, error: problem, data: null }) })
+      }
+      function runFromInput() {
+        var value = asText(input, '').trim()
+        if (!value) return
+        if (mode === 'doi') dispatch({ paper_doi: value })
+        else if (mode === 'path') dispatch({ paper_path: value })
+        else dispatch({ paper_pmid: value })
+      }
+      function runFromCaption() {
+        var value = asText(caption, '').trim()
+        if (!value) return
+        dispatch({ figure_caption: value })
+      }
+      var figures = asArray(result.data && result.data.figures)
+      return h('div', { className: 'bf-paperfig' },
+        h('div', { className: 'bf-chips' },
+          h('span', { className: 'bf-composer-hint' }, '来源'),
+          [['pmid', 'PMID'], ['doi', 'DOI'], ['path', '本地 PDF 路径']].map(function (item) {
+            return h('button', {
+              key: item[0], type: 'button',
+              className: 'bf-chip' + (mode === item[0] ? ' bf-chip-on' : ''),
+              onClick: function () { setMode(item[0]) },
+            }, item[1])
+          })),
+        h('div', { className: 'bf-row' },
+          h('input', {
+            className: 'bf-input bf-input-sm', style: { flex: '1 1 240px' },
+            value: input,
+            placeholder: mode === 'path' ? '/abs/path/paper.pdf' : mode === 'doi' ? '10.1038/s41586-...' : 'PMID（需 PMC 开放全文，如 24089192）',
+            onChange: function (event) { setInput(event.target.value) },
+            onKeyDown: function (event) { if (isImeComposing(event)) return; if (event.key === 'Enter') runFromInput() },
+          }),
+          h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: result.loading, onClick: runFromInput },
+            h(Icon, { name: 'search', size: 11 }), result.loading ? '拆解中…' : '从论文拆图')),
+        h('div', { className: 'bf-composer-hint', style: { marginTop: '6px' } }, '或者直接粘贴图注（不联网、最准）：'),
+        h('div', { className: 'bf-row', style: { alignItems: 'flex-start' } },
+          h('textarea', {
+            className: 'bf-input bf-input-sm', rows: 3, style: { flex: '1 1 240px', resize: 'vertical' },
+            value: caption, placeholder: 'Figure 2. Kaplan-Meier survival curves of overall survival in gastric cancer (log-rank P=0.01)…',
+            onChange: function (event) { setCaption(event.target.value) },
+          }),
+          h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: result.loading, onClick: runFromCaption }, '识别图注')),
+        result.loading ? h(Skeleton, { lines: 3 }) : null,
+        result.error ? h('div', { className: 'bf-inline-error' }, '拆解失败：' + asText(result.error.message || result.error, '未知错误')) : null,
+        result.data && !figures.length
+          ? h('div', { className: 'bf-inline-error' }, asText(result.data.summary, '没有拿到可用图注') + '（' + asArray(result.data.notes).join('；') + '）')
+          : null,
+        figures.length ? h('div', { className: 'bf-joint-list' },
+          figures.map(function (figure) {
+            return h('div', { key: figure.index + ':' + figure.label, className: 'bf-clinical-hit' },
+              h('div', { className: 'bf-clinical-hit-title' },
+                h('span', { className: 'bf-mono' }, asText(figure.label, 'Figure')),
+                h('span', { className: 'bf-badge bf-badge-run' }, asText(figure.chart_label_zh, '未知图型')),
+                figure.plotlab_chart ? h('span', { className: 'bf-muted' }, ' · plotlab: ' + figure.plotlab_chart) : null,
+                figure.template ? h('span', { className: 'bf-muted' }, ' · 模板 ' + figure.template) : null),
+              h('div', { className: 'bf-clinical-hit-meta bf-muted' }, asText(figure.caption, '').slice(0, 260)),
+              h('div', { className: 'bf-clinical-hit-meta bf-muted' }, '需要：' + asText(figure.need_data, '—')),
+              h('div', { className: 'bf-joint-actions' },
+                h('button', {
+                  type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary',
+                  onClick: function () { if (props.onCompose) props.onCompose(asText(figure.wish_text, '')); if (props.onClose) props.onClose() },
+                }, h(Icon, { name: 'send', size: 11 }), '按这张图许愿')))
+          })) : null)
+    }
+
     function ChatColumn(props) {
       var messages = props.messages || []
       var figureState = useState(false)
       var figureOpen = figureState[0]
       var setFigureOpen = figureState[1]
+      var figureModeState = useState('presets')
+      var figureMode = figureModeState[0]
+      var setFigureMode = figureModeState[1]
       var examplesState = useState(false)
       var showExamples = examplesState[0]
       var setShowExamples = examplesState[1]
@@ -2595,15 +2687,25 @@
             figureOpen ? h('div', { className: 'bf-modal', role: 'dialog', 'aria-label': '照着图来' },
               h('div', { className: 'bf-modal-card' },
                 h('div', { className: 'bf-modal-head' },
-                  h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'image', size: 13 }), '照着图来：你想要哪张图？'),
+                  h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'image', size: 13 }), '照着图来'),
+                  h('div', { className: 'bf-chips', style: { marginLeft: '6px' } },
+                    h('button', { type: 'button', className: 'bf-chip' + (figureMode === 'presets' ? ' bf-chip-on' : ''), onClick: function () { setFigureMode('presets') } }, '常见图型'),
+                    h('button', { type: 'button', className: 'bf-chip' + (figureMode === 'paper' ? ' bf-chip-on' : ''), onClick: function () { setFigureMode('paper') } }, '从论文拆图')),
                   h('div', { className: 'bf-spacer' }),
                   h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: function () { setFigureOpen(false) } }, h(Icon, { name: 'close', size: 11 }), '关闭')),
-                h('div', { className: 'bf-modal-body' }, FIGURE_PRESETS.map(function (preset) {
-                  return h('button', {
-                    key: preset.id, type: 'button', className: 'bf-example',
-                    onClick: function () { props.onCompose(preset.need); setFigureOpen(false) },
-                  }, preset.label)
-                })))) : null,
+                h('div', { className: 'bf-modal-body' },
+                  figureMode === 'presets'
+                    ? FIGURE_PRESETS.map(function (preset) {
+                      return h('button', {
+                        key: preset.id, type: 'button', className: 'bf-example',
+                        onClick: function () { props.onCompose(preset.need); setFigureOpen(false) },
+                      }, preset.label)
+                    })
+                    : h(PaperFigurePanel, {
+                      api: props.api,
+                      onCompose: props.onCompose,
+                      onClose: function () { setFigureOpen(false) },
+                    })))) : null,
             hasConversation ? null : h('button', {
               type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost bf-examples-toggle',
               onClick: function () { setShowExamples(!showExamples) },
@@ -6340,6 +6442,7 @@
                 })
                 : h('div', { className: 'bf-body' },
           h(ChatColumn, {
+            api: api,
             messages: messages, text: askText, onTextChange: setAskText, onSend: handleSend, asking: asking,
             onCompose: function (composed) { setAskText(composed) },
             onNavigate: gotoPage,
