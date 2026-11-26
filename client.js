@@ -1617,11 +1617,18 @@
     '.bf-wish-input{width:100%;min-height:46px;max-height:170px;resize:none;border:0;outline:none;background:transparent;padding:2px 0;font-size:13px;line-height:1.6;color:var(--bf-ink-1);font-family:var(--bf-sans)}.bf-wish-input::placeholder{color:color-mix(in srgb,var(--bf-ink-2) 72%,transparent)}.bf-wish-bar{display:flex;align-items:center;gap:8px;min-height:34px}.bf-send{width:34px;height:34px;flex:none;border-radius:12px;border:0;background:linear-gradient(135deg,var(--bf-accent-2),var(--bf-accent));color:#FFFFFF;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 10px 20px -10px rgba(14,165,233,.85);transition:transform .12s ease,box-shadow .12s ease}.bf-send:hover:not([disabled]){transform:translateY(-1px);box-shadow:0 14px 24px -12px rgba(14,165,233,.95)}.bf-send[disabled]{opacity:.42;box-shadow:none;cursor:not-allowed}.bf-chips{display:flex;gap:6px;flex-wrap:wrap}.bf-chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--bf-line);background:rgba(255,255,255,.72);color:var(--bf-ink-1);font-size:11px;white-space:nowrap;transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease}.bf-chip:hover{border-color:var(--bf-line-glow);background:#FFFFFF;box-shadow:0 0 0 3px color-mix(in srgb,var(--bf-accent-3) 22%,transparent)}.bf-composer-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.bf-composer-hint{font-size:11px;color:var(--bf-ink-2);line-height:1.4}',
     '.bf-work{display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;padding-right:2px}',
     '.bf-stack{display:flex;flex-direction:column;gap:10px;min-height:0}',
-    '.bf-progress{position:relative;flex:none;display:flex;flex-direction:column;gap:9px;padding:13px 15px;border:1px solid var(--bf-line);border-radius:var(--bf-radius);background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(243,251,255,.9));box-shadow:var(--bf-shadow)}',
-    '.bf-progress::before{content:"";position:absolute;left:18px;right:18px;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--bf-accent-3) 25%,var(--bf-accent-2) 50%,var(--bf-accent-3) 75%,transparent);opacity:.9}',
-    '.bf-progress-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
+    '.bf-progress{position:relative;flex:none;display:flex;flex-direction:column;gap:8px;padding:2px 2px 9px;border:0;border-bottom:1px solid color-mix(in srgb,var(--bf-line) 80%,transparent);border-radius:0;background:transparent;box-shadow:none}',
+
+    '.bf-progress-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:26px}',
+    '.bf-progress-title{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--bf-ink-1)}',
+    '.bf-progress-idle-hint{font-size:11px;color:var(--bf-ink-2)}',
+    '.bf-inline-stats{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}',
+    '.bf-stat{display:inline-flex;align-items:baseline;gap:4px;font-size:11px;color:var(--bf-ink-2)}',
+    '.bf-stat-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--bf-ink-2);opacity:.85}',
+    '.bf-stat b{font-size:13px;font-weight:600;color:var(--bf-ink-1);font-variant-numeric:tabular-nums}',
+    '.bf-progress-actions-label{font-size:11px;color:var(--bf-ink-2)}',
     '.bf-progress-pct{font-size:11px;color:var(--bf-ink-2);letter-spacing:.06em}',
-    '.bf-progress-bar{position:relative;height:6px;border-radius:999px;background:color-mix(in srgb,var(--bf-bg-1) 88%,var(--bf-line));overflow:hidden}',
+    '.bf-progress-bar{position:relative;height:4px;border-radius:999px;background:color-mix(in srgb,var(--bf-bg-1) 88%,var(--bf-line));overflow:hidden}',
     '.bf-progress-fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--bf-accent-3),var(--bf-accent));box-shadow:0 0 12px -2px color-mix(in srgb,var(--bf-accent) 80%,transparent);transition:width .4s ease}',
     '.bf-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}',
     '.bf-kpi{display:flex;flex-direction:column;gap:1px;padding:7px 9px;border:1px solid color-mix(in srgb,var(--bf-line) 78%,transparent);border-radius:12px;background:rgba(255,255,255,.7);min-width:0}',
@@ -1645,7 +1652,7 @@
     '.bf-tab-on{color:#04222F;border-color:transparent;background:linear-gradient(135deg,var(--bf-accent-2),var(--bf-accent));box-shadow:0 8px 18px -12px rgba(14,165,233,.85)}',
     '.bf-wishdeck{flex:none}',
     '.bf-wishdeck-body{padding:10px 12px 12px;gap:9px;overflow:visible}',
-    '.bf-progress-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:2px}',
+    '.bf-progress-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.bf-outdir{max-width:260px;min-height:26px;font-size:11px}',
     '.bf-inline-error{margin-top:8px;padding:8px 10px;border:1px solid color-mix(in srgb,var(--bf-err) 45%,var(--bf-line));border-radius:10px;background:color-mix(in srgb,var(--bf-err) 7%,#FFFFFF);color:var(--bf-err);font-size:11.5px}',
     '.bf-logic{display:flex;flex-direction:column;gap:12px;padding:14px;min-height:0;overflow-y:auto}',
@@ -1663,6 +1670,10 @@
     '.bf-logic-input:focus{border-color:var(--bf-line-glow);box-shadow:var(--bf-glow)}',
     '.bf-logic-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.bf-clinical-grid{display:grid;grid-template-columns:minmax(0,0.95fr) minmax(0,1.05fr);gap:12px}',
+    '.bf-healthline{display:inline-flex;align-items:center;gap:6px;padding:2px 4px;border:0;background:transparent;color:color-mix(in srgb,var(--bf-bg-1) 62%,transparent);font-size:11px;letter-spacing:.01em;cursor:pointer;border-radius:6px}',
+    '.bf-healthline:hover{color:color-mix(in srgb,var(--bf-bg-1) 88%,transparent)}',
+    '.bf-healthline-dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9}',
+    '.bf-healthline-sep{width:1px;height:10px;background:color-mix(in srgb,var(--bf-bg-1) 24%,transparent)}',
     '.bf-lamps-compact{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;border:1px solid var(--bf-line);background:rgba(255,255,255,.72);font-size:11px;color:var(--bf-ink-2);cursor:pointer}',
     '.bf-top-sep{width:1px;height:12px;background:var(--bf-line);display:inline-block}',
     '.bf-examples-toggle{align-self:flex-start}',
@@ -1749,9 +1760,9 @@
     '.bf-skeleton{display:flex;flex-direction:column;gap:6px}',
     '.bf-skel-line{height:10px;border-radius:6px;background:linear-gradient(90deg,color-mix(in srgb,var(--bf-bg-1) 90%,var(--bf-line)) 0%,var(--bf-bg-2) 40%,color-mix(in srgb,var(--bf-bg-1) 90%,var(--bf-line)) 80%);background-size:220% 100%;animation:bfShimmer 1.25s linear infinite}',
     '@keyframes bfShimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}',
-    '.bf-progress{position:relative;flex:1 1 auto;min-width:60px;height:6px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--bf-line) 62%,var(--bf-bg-2))}',
-    '.bf-progress-fill{position:absolute;top:0;bottom:0;left:0;border-radius:999px;background:var(--bf-accent);transition:width .3s ease}',
-    '.bf-progress-indet{position:absolute;top:0;bottom:0;width:38%;border-radius:999px;background:var(--bf-accent);animation:bfSlide 1.1s ease-in-out infinite}',
+    '.bf-progressbar{position:relative;flex:1 1 auto;min-width:60px;height:6px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--bf-line) 62%,var(--bf-bg-2))}',
+    '.bf-progressbar-fill{position:absolute;top:0;bottom:0;left:0;border-radius:999px;background:var(--bf-accent);transition:width .3s ease}',
+    '.bf-progressbar-indet{position:absolute;top:0;bottom:0;width:38%;border-radius:999px;background:var(--bf-accent);animation:bfSlide 1.1s ease-in-out infinite}',
     '@keyframes bfSlide{0%{left:-40%}100%{left:102%}}',
     /* 时间线 */
     '.bf-timeline{display:flex;flex-direction:column;gap:6px}',
@@ -2182,14 +2193,14 @@
       var indeterminate = Boolean(props && props.indeterminate)
       var value = Math.max(0, Math.min(100, asNumber(props && props.value, 0)))
       return h('div', {
-        className: 'bf-progress',
+        className: 'bf-progressbar',
         role: 'progressbar',
         'aria-valuemin': 0, 'aria-valuemax': 100,
         'aria-valuenow': indeterminate ? undefined : value,
         title: asText(props && props.title, ''),
       }, indeterminate
-        ? h('div', { className: 'bf-progress-indet' })
-        : h('div', { className: 'bf-progress-fill', style: { width: value + '%' } }))
+        ? h('div', { className: 'bf-progressbar-indet' })
+        : h('div', { className: 'bf-progressbar-fill', style: { width: value + '%' } }))
     }
 
     function Collapsible(props) {
@@ -2295,21 +2306,21 @@
             h('span', null, activeCount ? '进行中 ' + activeCount + ' 个 run' : '暂无进行中的 run')),
 
         h('button', {
-          type: 'button', className: 'bf-lamps bf-lamps-compact',
-          title: '健康检查（点击打开数据源）：' + healthDetail,
+          type: 'button', className: 'bf-healthline',
+          title: '健康检查（点击打开数据源）：' + (healthDetail || '状态加载中'),
           onClick: function () {
             var firstBad = sourceEntries.filter(function (row) { return row.meta.tone !== 'ok' })[0]
             if (typeof props.onOpenSource === 'function') props.onOpenSource(firstBad ? firstBad.tab.id : (SOURCE_TABS[0] && SOURCE_TABS[0].id))
           },
         },
-          h('span', { className: 'bf-lamp-dot bf-tone-' + (sourcesOk === sourceEntries.length ? 'ok' : 'warn') }),
-          h('span', null, '数据源 ' + sourcesOk + '/' + sourceEntries.length),
-          h('span', { className: 'bf-top-sep', 'aria-hidden': 'true' }),
-          h('span', { className: 'bf-lamp-dot bf-tone-' + (pluginsOk === pluginRows.length ? 'ok' : 'warn') }),
-          h('span', null, '工作台 ' + pluginsOk + '/' + pluginRows.length)),
+          h('span', { className: 'bf-healthline-dot bf-tone-' + (sourceEntries.length && sourcesOk === sourceEntries.length ? 'ok' : 'warn') }),
+          h('span', null, sourceEntries.length ? '数据源 ' + sourcesOk + '/' + sourceEntries.length : '数据源 …'),
+          h('span', { className: 'bf-healthline-sep', 'aria-hidden': 'true' }),
+          h('span', { className: 'bf-healthline-dot bf-tone-' + (pluginRows.length && pluginsOk === pluginRows.length ? 'ok' : 'warn') }),
+          h('span', null, pluginRows.length ? '工作台 ' + pluginsOk + '/' + pluginRows.length : '工作台 …')),
 
-        h('div', { className: 'bf-top-group bf-env', title: (status.storeKind ? status.storeKind + ' · ' : '') + 'v' + asText(status.version || catalog.version, PLUGIN_VERSION) },
-          h(PathChip, { path: dataRoot, onCopy: props.onCopy, empty: '数据根未知' })),
+        dataRoot ? h('div', { className: 'bf-top-group bf-env', title: (status.storeKind ? status.storeKind + ' · ' : '') + 'v' + asText(status.version || catalog.version, PLUGIN_VERSION) },
+          h(PathChip, { path: dataRoot, onCopy: props.onCopy, empty: '数据根未知' })) : null,
 
         h('div', { className: 'bf-top-actions' },
           h('button', { className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: props.onOpenTrash, title: '回收站：恢复或彻底删除已删除的 run' },
@@ -3742,11 +3753,8 @@
       var mode = asText(props.mode, 'files')
       var runId = asText(props.runId, '')
       if (!runId) {
-        return h(EmptyState, {
-          icon: 'folder',
-          title: '还没有选中的 run',
-          sub: '提交计划后会自动选中新 run；也可以从左栏「历史 run」里挑一个。',
-        })
+        return h('div', { className: 'bf-muted', style: { padding: '10px 2px', lineHeight: '1.6' } },
+          '还没有选中的 run。提交计划后会自动选中；也可以从左栏「历史 run」里点一个。')
       }
       var files = h(FileEntries, {
         runId: runId, runStatus: props.runStatus, dataRoot: props.dataRoot,
@@ -3951,35 +3959,45 @@
       var tables = asArray(runStatus && runStatus.tables)
       var counts = props.evidenceCounts || null
       var zeroSignificant = Boolean(runStatus && runStatus.zeroSignificant)
-      return h('div', { className: 'bf-progress' },
+      var hasRun = Boolean(runStatus)
+      var evidenceTotal = counts ? (counts.measured || 0) + (counts.descriptive || 0) + (counts.model_prediction || 0) : null
+      function stat(label, value, sub) {
+        return h('span', { className: 'bf-stat', title: sub || '' },
+          h('span', { className: 'bf-stat-label' }, label),
+          h('b', null, value))
+      }
+      return h('div', { className: 'bf-progress' + (hasRun ? ' bf-progress-live' : ' bf-progress-idle') },
         h('div', { className: 'bf-progress-head' },
-          h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'flow', size: 12 }), '进度与产物'),
-          runStatus ? h(StatusBadge, { status: runStatus.status, kind: 'run' }) : h(Badge, { tone: 'muted' }, '还没有 run'),
-          runStatus && runStatus.runId ? h('span', { className: 'bf-mono bf-muted' }, shortId(runStatus.runId, 20)) : null,
+          h('span', { className: 'bf-progress-title' }, h(Icon, { name: 'flow', size: 12 }), '进度与产物'),
+          runStatus ? h(StatusBadge, { status: runStatus.status, kind: 'run' }) : null,
+          runStatus && runStatus.runId ? h('span', { className: 'bf-mono bf-muted' }, shortId(runStatus.runId, 18)) : null,
           zeroSignificant ? h(Badge, { tone: 'warn' }, '零显著') : null,
           h('div', { className: 'bf-spacer' }),
-          h('span', { className: 'bf-mono bf-progress-pct' }, total ? okCount + '/' + total + ' 步' : '—')),
-        h('div', { className: 'bf-progress-bar', role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 },
-          h('span', { className: 'bf-progress-fill', style: { width: pct + '%' } })),
-        h('div', { className: 'bf-kpis' },
-          h('div', { className: 'bf-kpi' }, h('span', { className: 'bf-kpi-label' }, '步骤'), h('b', null, total ? okCount + ' / ' + total : '—'), failed ? h('span', { className: 'bf-kpi-sub bf-tone-err' }, failed + ' 失败') : null),
-          h('div', { className: 'bf-kpi' }, h('span', { className: 'bf-kpi-label' }, '图'), h('b', null, figures.length || '—'), h('span', { className: 'bf-kpi-sub' }, figures.length ? 'PNG 300dpi' : '提交后生成')),
-          h('div', { className: 'bf-kpi' }, h('span', { className: 'bf-kpi-label' }, '表'), h('b', null, tables.length || '—'), h('span', { className: 'bf-kpi-sub' }, tables.length ? 'results/*.tsv' : '待产出')),
-          h('div', { className: 'bf-kpi' }, h('span', { className: 'bf-kpi-label' }, '证据'), h('b', null, counts ? String((counts.measured || 0) + (counts.descriptive || 0) + (counts.model_prediction || 0)) : '—'), h('span', { className: 'bf-kpi-sub' }, counts && counts.model_prediction ? counts.model_prediction + ' 条模型预测' : 'claim 索引')),
-          h('div', { className: 'bf-kpi' }, h('span', { className: 'bf-kpi-label' }, '闸门'), h('b', null, props.blockedCount ? String(props.blockedCount) : '0'), h('span', { className: 'bf-kpi-sub' }, props.blockedCount ? 'blocked' : '未拦截'))),
-        h('div', { className: 'bf-progress-actions' },
-          h('span', { className: 'bf-composer-hint' }, '输出到'),
+          hasRun
+            ? h('div', { className: 'bf-inline-stats' },
+              stat('步骤', total ? okCount + '/' + total : '—', failed ? failed + ' 步失败' : ''),
+              stat('图', figures.length || '—', figures.length ? 'PNG 300dpi' : ''),
+              stat('表', tables.length || '—', tables.length ? 'results/*.tsv' : ''),
+              stat('证据', evidenceTotal === null ? '—' : String(evidenceTotal), counts && counts.model_prediction ? counts.model_prediction + ' 条模型预测' : ''),
+              stat('闸门', String(props.blockedCount || 0), props.blockedCount ? 'blocked' : '未拦截'))
+            : h('span', { className: 'bf-progress-idle-hint' }, '提交计划后这里会显示步骤 / 图 / 表 / 证据')),
+        hasRun && total
+          ? h('div', { className: 'bf-progress-bar', role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 },
+            h('span', { className: 'bf-progress-fill', style: { width: pct + '%' } }))
+          : null,
+        hasRun ? h('div', { className: 'bf-progress-actions' },
+          h('span', { className: 'bf-progress-actions-label' }, '输出到'),
           h('input', {
             className: 'bf-input bf-input-sm bf-outdir', value: asText(props.outputDir, ''),
             placeholder: '默认：run 旁 / 未设置',
             onChange: function (event) { if (props.onOutputDirChange) props.onOutputDirChange(event.target.value) },
           }),
-          h('button', { type: 'button', className: 'bf-btn bf-btn-sm', disabled: props.saving, onClick: props.onSaveOutputDir }, props.saving ? '保存中…' : '保存'),
+          h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', disabled: props.saving, onClick: props.onSaveOutputDir }, props.saving ? '保存中…' : '保存'),
           h('div', { className: 'bf-spacer' }),
           h('button', {
             type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary',
-            disabled: !props.runStatus || props.exporting, onClick: props.onExport,
-          }, h(Icon, { name: 'download', size: 11 }), props.exporting ? '导出中…' : '导出结果包')))
+            disabled: props.exporting, onClick: props.onExport,
+          }, h(Icon, { name: 'download', size: 11 }), props.exporting ? '导出中…' : '导出结果包')) : null)
     }
 
     function PipelineStrip(props) {
