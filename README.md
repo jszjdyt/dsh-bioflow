@@ -10,14 +10,14 @@
 
 | 入口 | 形态 | 说明 |
 |---|---|---|
-| **`bioflow` agent 工具** | 对话里调用 | 21 个 action，和页面按钮、CLI 共用同一份 `lib/impl.mjs` |
+| **`bioflow` agent 工具** | 对话里调用 | 25 个 action，和页面按钮、CLI 共用同一份 `lib/impl.mjs` |
 | **`bioflow` CLI** | `bin/bioflow.mjs` | 同一套函数、同一份数据根，适合脚本与排查 |
 | **HTTP 路由** | `/bioflow/*` | `dispatch` / `catalog` / `status` / `health` / `figures/<run_id>/<file>` / `files/<rel>` |
 | **左侧栏整页 UI** | 淡蓝/天蓝科幻风 | 「许愿式生物信息分析」整页：左栏许愿、中栏计划与流水线、右栏数据源/下载/产物证据；规格见仓库根 [`BIOFLOW_UI_SPEC.md`](../../BIOFLOW_UI_SPEC.md) |
 
 > 浏览器侧入口文件是 `client.js`（`package.json` 的 `exports["./client"]` 指向它）。当前 checkout 若还没包含 `client.js`，工具与 CLI 覆盖全部能力，只差那一层页面壳。
 
-`bioflow` 工具的 21 个 action，一句话版：
+`bioflow` 工具的 25 个 action，一句话版：
 
 | action | 一句话 |
 |---|---|
@@ -115,7 +115,7 @@ node plugins/dsh-bioflow/bin/bioflow.mjs run_status --run-id=<run_id>
 node plugins/dsh-bioflow/bin/bioflow.mjs audit --json
 ```
 
-CLI 子命令就是 action 名（`run_status` 和 `run-status` 两种写法都认，内部统一转下划线；`node plugins/dsh-bioflow/bin/bioflow.mjs help` 看用法）：`status | templates | search | source_detail | health | download | register | datasets | ask | plan | submit | runs | run_status | cancel | export | evidence | methods | audit | suggest | harmonize | joint`。退出码：`0` 成功；`2` 被闸门拦下或执行失败（stdout/stderr 里带原因）。
+CLI 子命令就是 action 名（`run_status` 和 `run-status` 两种写法都认，内部统一转下划线；`node plugins/dsh-bioflow/bin/bioflow.mjs help` 看用法）：`status | templates | search | source_detail | health | download | register | datasets | ask | advise | topics | plan | submit | runs | run_status | cancel | export | evidence | methods | audit | suggest | suggest_next | harmonize | joint | delete | trash | settings`。退出码：`0` 成功；`2` 被闸门拦下或执行失败（stdout/stderr 里带原因）。
 
 ### ③ 页面（左侧栏整页）
 

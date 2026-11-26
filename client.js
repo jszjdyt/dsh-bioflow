@@ -1663,6 +1663,10 @@
     '.bf-logic-input:focus{border-color:var(--bf-line-glow);box-shadow:var(--bf-glow)}',
     '.bf-logic-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
     '.bf-clinical-grid{display:grid;grid-template-columns:minmax(0,0.95fr) minmax(0,1.05fr);gap:12px}',
+    '.bf-lamps-compact{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;border:1px solid var(--bf-line);background:rgba(255,255,255,.72);font-size:11px;color:var(--bf-ink-2);cursor:pointer}',
+    '.bf-top-sep{width:1px;height:12px;background:var(--bf-line);display:inline-block}',
+    '.bf-examples-toggle{align-self:flex-start}',
+    '.bf-card-compact{padding:12px 14px}',
     '.bf-modal{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,#071A29 42%,transparent);backdrop-filter:blur(6px);padding:24px}',
     '.bf-modal-card{display:flex;flex-direction:column;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 64px);border:1px solid var(--bf-line);border-radius:18px;background:linear-gradient(180deg,#FFFFFF,rgba(246,252,255,.98));box-shadow:0 40px 90px -50px rgba(8,60,96,.7);overflow:hidden}',
     '.bf-modal-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--bf-line)}',
@@ -2254,6 +2258,17 @@
       var activeCount = ['queued', 'running', 'pending_review'].reduce(function (sum, key) {
         return sum + (asNumber(runsByStatus[key], 0) || 0)
       }, 0)
+      var sourceEntries = SOURCE_TABS.map(function (tab) {
+        var entry = health.sources ? health.sources[tab.id] : null
+        return { tab: tab, entry: entry, meta: healthMeta(entry && entry.status) }
+      })
+      var sourcesOk = sourceEntries.filter(function (row) { return row.meta.tone === 'ok' }).length
+      var pluginsOk = pluginRows.filter(function (row) { return row.available }).length
+      var healthDetail = sourceEntries.map(function (row) {
+        return row.tab.label + '=' + row.meta.label
+      }).concat(pluginRows.map(function (row) {
+        return asText(row.label, row.plugin) + '=' + (row.available ? '可用' : '不可用')
+      })).join('；')
       return h('header', { className: 'bf-top', role: 'banner' },
         h('div', { className: 'bf-brand' },
           h('span', { className: 'bf-mark', 'aria-hidden': 'true' }, h(Icon, { name: 'flask', size: 16 })),
@@ -2279,42 +2294,26 @@
             h(Dot, { tone: activeCount ? 'run' : 'ok' }),
             h('span', null, activeCount ? '进行中 ' + activeCount + ' 个 run' : '暂无进行中的 run')),
 
-        h('div', { className: 'bf-lamps', role: 'group', 'aria-label': '数据源健康灯' },
-          SOURCE_TABS.map(function (tab) {
-            var entry = health.sources ? health.sources[tab.id] : null
-            var meta = healthMeta(entry && entry.status)
-            return h('button', {
-              key: tab.id, type: 'button', className: 'bf-lamp',
-              title: healthTitle(tab.id, entry),
-              onClick: function () { if (typeof props.onOpenSource === 'function') props.onOpenSource(tab.id) },
-            },
-              h('span', { className: 'bf-lamp-dot bf-tone-' + meta.tone }),
-              h('span', null, tab.label),
-              h('span', { className: 'bf-muted' }, meta.label))
-          })),
-
-        pluginRows.length
-          ? h('div', {
-            className: 'bf-lamps', role: 'group', 'aria-label': '工作台插件健康灯',
-            title: '六个工作台插件可用性（catalog.plugins）：' + pluginRows.map(function (row) {
-              return asText(row.label, row.plugin) + '=' + (row.available ? '可用' : '不可用' + (row.error ? '（' + row.error + '）' : ''))
-            }).join('；'),
+        h('button', {
+          type: 'button', className: 'bf-lamps bf-lamps-compact',
+          title: '健康检查（点击打开数据源）：' + healthDetail,
+          onClick: function () {
+            var firstBad = sourceEntries.filter(function (row) { return row.meta.tone !== 'ok' })[0]
+            if (typeof props.onOpenSource === 'function') props.onOpenSource(firstBad ? firstBad.tab.id : (SOURCE_TABS[0] && SOURCE_TABS[0].id))
           },
-            h('span', { className: 'bf-muted', style: { fontSize: '11px', padding: '0 2px' } },
-              '工作台 ' + pluginRows.filter(function (row) { return row.available }).length + '/' + pluginRows.length),
-            pluginRows.map(function (row) {
-              return h('button', {
-                key: row.plugin, type: 'button', className: 'bf-lamp', title: asText(row.label, row.plugin) + '：' + (row.available ? '可用' : '不可用' + (row.error ? '（' + row.error + '）' : '')),
-              }, h('span', { className: 'bf-lamp-dot bf-tone-' + (row.available ? 'ok' : 'err') }))
-            }))
-          : null,
+        },
+          h('span', { className: 'bf-lamp-dot bf-tone-' + (sourcesOk === sourceEntries.length ? 'ok' : 'warn') }),
+          h('span', null, '数据源 ' + sourcesOk + '/' + sourceEntries.length),
+          h('span', { className: 'bf-top-sep', 'aria-hidden': 'true' }),
+          h('span', { className: 'bf-lamp-dot bf-tone-' + (pluginsOk === pluginRows.length ? 'ok' : 'warn') }),
+          h('span', null, '工作台 ' + pluginsOk + '/' + pluginRows.length)),
 
-        h('div', { className: 'bf-top-group bf-env' },
-          h(PathChip, { path: dataRoot, onCopy: props.onCopy, empty: '数据根未知' }),
-          h('span', { className: 'bf-env-meta' },
-            (status.storeKind ? status.storeKind + ' · ' : '') + 'v' + asText(status.version || catalog.version, PLUGIN_VERSION))),
+        h('div', { className: 'bf-top-group bf-env', title: (status.storeKind ? status.storeKind + ' · ' : '') + 'v' + asText(status.version || catalog.version, PLUGIN_VERSION) },
+          h(PathChip, { path: dataRoot, onCopy: props.onCopy, empty: '数据根未知' })),
 
         h('div', { className: 'bf-top-actions' },
+          h('button', { className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: props.onOpenTrash, title: '回收站：恢复或彻底删除已删除的 run' },
+            h(Icon, { name: 'trash', size: 12 }), '回收站'),
           h('button', { className: 'bf-btn bf-btn-sm', onClick: props.onRefresh, title: '重新拉取状态与健康灯' },
             h(Icon, { name: 'refresh', size: 12 }), '刷新'),
           activeRun && isActiveStatus(activeRun.status)
@@ -2503,18 +2502,20 @@
       var runs = props.runs || []
       var loading = Boolean(props.loading)
       var error = props.error
-      return h('div', { className: 'bf-panel', style: { flex: 'none', maxHeight: '158px' } },
+      return h('div', { className: 'bf-panel', style: { flex: 'none', maxHeight: '132px' } },
         h('div', { className: 'bf-panel-head' },
           h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'clock', size: 12 }), '历史 run'),
-          h('span', { className: 'bf-panel-sub' }, runs.length ? runs.length + ' 条' : ''),
+          h('span', { className: 'bf-panel-sub' }, runs.length ? runs.length + ' 条' : '暂无'),
           h('div', { className: 'bf-panel-actions' },
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: props.onOpenTrash, title: '打开回收站（可恢复或彻底删除）' },
+              h(Icon, { name: 'trash', size: 11 }), '回收站'),
             h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: props.onRefresh, title: '重新拉取 run 列表' },
               h(Icon, { name: 'refresh', size: 11 })))),
         h('div', { className: 'bf-panel-body' },
           error ? h(ErrorBar, { error: error, title: 'run 列表加载失败', onRetry: props.onRefresh }) : null,
-          loading && !runs.length ? h(Skeleton, { lines: 3 }) : null,
+          loading && !runs.length ? h(Skeleton, { lines: 2 }) : null,
           !loading && !runs.length && !error
-            ? h(EmptyState, { icon: 'list', title: '还没有 run', sub: '先许愿生成 draft 计划，确认提交后会出现 run_id 与时间线。' })
+            ? h('div', { className: 'bf-muted', style: { padding: '2px 2px 4px' } }, '暂无历史 run；提交计划后会出现在这里。')
             : h('div', { className: 'bf-runlist' }, runs.map(function (run) {
               var selected = run.runId === props.selectedRunId
               return h('button', {
@@ -2557,6 +2558,9 @@
       var figureState = useState(false)
       var figureOpen = figureState[0]
       var setFigureOpen = figureState[1]
+      var examplesState = useState(false)
+      var showExamples = examplesState[0]
+      var setShowExamples = examplesState[1]
       var hasConversation = messages.some(function (message) {
         return message && (message.role === 'user' || message.role === 'agent')
       })
@@ -2589,12 +2593,16 @@
                     onClick: function () { props.onCompose(preset.need); setFigureOpen(false) },
                   }, preset.label)
                 })))) : null,
-            hasConversation ? null : h('div', { className: 'bf-feed-examples' },
-              h('div', { className: 'bf-composer-hint' }, '不知道怎么说？点一个例子，或直接用下面的常用套路：'),
+            hasConversation ? null : h('button', {
+              type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost bf-examples-toggle',
+              onClick: function () { setShowExamples(!showExamples) },
+            }, h(Icon, { name: showExamples ? 'chevron' : 'list', size: 11 }), showExamples ? '收起示例与套路' : '看示例 / 常用套路'),
+            hasConversation || !showExamples ? null : h('div', { className: 'bf-feed-examples' },
+              h('div', { className: 'bf-composer-hint' }, '点一个例子，或直接用下面的常用套路：'),
               WISH_EXAMPLES.slice(0, 3).map(function (example) {
                 return h('button', { key: example, type: 'button', className: 'bf-example', onClick: function () { props.onCompose(example) } }, example)
               })),
-            h(TemplateWish, { onCompose: props.onCompose }),
+            hasConversation || !showExamples ? null : h(TemplateWish, { onCompose: props.onCompose }),
             h(Composer, { text: props.text, onChange: props.onTextChange, onSend: props.onSend, asking: props.asking }))),
         h('section', { className: 'bf-panel', style: { flex: '1 1 auto', minHeight: 0 } },
           h('div', { className: 'bf-panel-head' },
@@ -2607,6 +2615,7 @@
             return h(MessageRow, { key: message.id || index, message: message })
           }))),
         h(HistoryPanel, {
+          onOpenTrash: props.onOpenTrash,
           runs: props.runs, loading: props.runsLoading, error: props.runsError,
           selectedRunId: props.selectedRunId, onSelect: props.onSelectRun, onRefresh: props.onRefreshRuns,
           onDeleteRun: props.onDeleteRun,
@@ -2847,17 +2856,12 @@
             h(Skeleton, { lines: 5, thick: true }),
             h('div', { className: 'bf-muted' }, '正在把许愿拆成 draft 计划草案；不会自动执行。'))
         }
-        return h('div', { className: 'bf-card' },
+        return h('div', { className: 'bf-card bf-card-compact' },
           h('div', { className: 'bf-card-head' },
-            h('span', { className: 'bf-card-title' }, h(Icon, { name: 'shield', size: 14 }), '计划草案')),
-          h(EmptyState, {
-            icon: 'chat',
-            title: '还没有计划草案',
-            sub: '在左栏许愿（⌘/Ctrl + Enter）。Bioflow 先给 draft·待确认：字段逐条可改，缺的会琥珀色高亮并给候选；确认后才提交成不可变 run。',
-            actions: props.statusSuggestion
-              ? [h('span', { className: 'bf-muted' }, props.statusSuggestion)]
-              : null,
-          }))
+            h('span', { className: 'bf-card-title' }, h(Icon, { name: 'shield', size: 14 }), '计划草案'),
+            h(Badge, { tone: 'muted' }, '等待许愿')),
+          h('div', { className: 'bf-muted', style: { padding: '2px 2px 8px', lineHeight: '1.6' } },
+            props.statusSuggestion || '在左栏说一句话（Enter 发送）。只出 draft：字段逐条可改，缺的给候选；你确认后才提交成不可变 run。'))
       }
 
       var rows = planFieldRows(draft, props.edits)
@@ -4791,6 +4795,78 @@
     }
 
     // ----------------------------------------------------------------------
+    // 回收站：列出被移入 trash/runs 的 run，可恢复或彻底删除
+    // ----------------------------------------------------------------------
+    function TrashModal(props) {
+      var api = props.api
+      var state = useState({ loading: false, error: null, items: [] })
+      var trash = state[0]
+      var setTrash = state[1]
+      var busyState = useState('')
+      var busy = busyState[0]
+      var setBusy = busyState[1]
+
+      function reload() {
+        if (!api) return
+        setTrash(function (previous) { return Object.assign({}, previous, { loading: true, error: null }) })
+        api.dispatch({ action: 'trash', trash_op: 'list' }).then(function (data) {
+          setTrash({ loading: false, error: null, items: asArray(data && data.items) })
+        }).catch(function (problem) { setTrash({ loading: false, error: problem, items: [] }) })
+      }
+      React.useEffect(function () { if (props.open) reload() }, [props.open])
+
+      function runOp(trashOp, id) {
+        if (!api) return
+        setBusy(trashOp + ':' + (id || 'all'))
+        api.dispatch({ action: 'trash', trash_op: trashOp, id: id }).then(function () {
+          setBusy('')
+          reload()
+          if (props.onChanged) props.onChanged()
+        }).catch(function (problem) {
+          setBusy('')
+          setTrash(function (previous) { return Object.assign({}, previous, { error: problem }) })
+        })
+      }
+
+      if (!props.open) return null
+      return h('div', { className: 'bf-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': '回收站' },
+        h('div', { className: 'bf-modal-card' },
+          h('div', { className: 'bf-modal-head' },
+            h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'trash', size: 13 }), '回收站'),
+            h('span', { className: 'bf-panel-sub' }, '删除的 run 先移到这里；恢复会重建索引，彻底删除不可撤销'),
+            h('div', { className: 'bf-spacer' }),
+            trash.items.length ? h('button', {
+              type: 'button', className: 'bf-btn bf-btn-sm bf-btn-danger', disabled: Boolean(busy),
+              onClick: function () { runOp('empty') },
+            }, busy === 'empty:all' ? '清空中…' : '清空回收站') : null,
+            h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: props.onClose }, h(Icon, { name: 'close', size: 11 }), '关闭')),
+          h('div', { className: 'bf-modal-body' },
+            trash.error ? h('div', { className: 'bf-inline-error' }, '回收站读取失败：' + asText(trash.error.message || trash.error, '未知错误')) : null,
+            trash.loading ? h(Skeleton, { lines: 3 }) : null,
+            !trash.loading && !trash.items.length ? h('div', { className: 'bf-muted', style: { padding: '10px 2px' } }, '回收站是空的。') : null,
+            trash.items.map(function (item) {
+              var key = asText(item.run_id, '')
+              return h('div', { key: key, className: 'bf-clinical-hit' },
+                h('div', { className: 'bf-clinical-hit-title' },
+                  h('span', { className: 'bf-mono' }, key),
+                  h('span', { className: 'bf-muted' }, ' · ' + asText(item.status, '?') + ' · ' + asText(item.template, '模板未知'))),
+                h('div', { className: 'bf-clinical-hit-meta bf-muted' },
+                  h('span', null, '删除时间 ' + asText(formatClock(item.deleted_at), '未知')),
+                  h('span', null, '大小 ' + Math.max(1, Math.round((Number(item.bytes) || 0) / 1024)) + ' KB'),
+                  item.zero_significant === true ? h('span', { className: 'bf-tone-warn' }, '零显著') : null),
+                h('div', { className: 'bf-joint-actions' },
+                  h('button', {
+                    type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', disabled: Boolean(busy),
+                    onClick: function () { runOp('restore', key) },
+                  }, h(Icon, { name: 'refresh', size: 11 }), busy === 'restore:' + key ? '恢复中…' : '恢复'),
+                  h('button', {
+                    type: 'button', className: 'bf-btn bf-btn-sm bf-btn-danger', disabled: Boolean(busy),
+                    onClick: function () { runOp('purge', key) },
+                  }, busy === 'purge:' + key ? '删除中…' : '彻底删除')))
+            }))))
+    }
+
+    // ----------------------------------------------------------------------
     // 数据向导：候选 → 每个数据集一页（分组提案，只检查）→ 总结页 → 执行
     // ----------------------------------------------------------------------
     var GROUP_CASE_WORDS = /(tumou?r|case|disease|cancer|carcinoma|metasta|malignant|treated|resistant|progress)/i
@@ -5424,6 +5500,9 @@
         } catch (error) { /* ignore */ }
       }
 
+      var trashOpenState = useState(false)
+      var trashOpen = trashOpenState[0]
+      var setTrashOpen = trashOpenState[1]
       var nextWishState = useState({ runId: '', loading: false, directions: [], zero: false })
       var nextWish = nextWishState[0]
       var setNextWish = nextWishState[1]
@@ -6187,6 +6266,7 @@
         h(TopBar, {
           status: status, catalog: catalog, health: health, activeRun: activeRunForBar,
           onCopy: handleCopy, onRefresh: refreshAll, onCancelRun: handleCancelRun,
+          onOpenTrash: function () { setTrashOpen(true) },
           onFocusRun: function () {
             if (timelineRef.current && timelineRef.current.scrollIntoView) {
               try { timelineRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch (error) { /* ignore */ }
@@ -6251,6 +6331,7 @@
             onSelectRun: function (runId) { setSelectedRunId(runId) },
             onRefreshRuns: loadRuns,
             onDeleteRun: deleteRun,
+            onOpenTrash: function () { setTrashOpen(true) },
             onClear: function () {
               setMessages([{
                 id: 'm-reset', role: 'system', at: new Date().toISOString(),
@@ -6296,8 +6377,8 @@
               },
             }),
             askError ? h(ErrorBar, { error: askError, title: 'ask / draft 解析失败', onRetry: function () { runAsk(lastQueryRef.current || askText, editsRef.current, {}) } }) : null,
-            h(PipelineStrip, { runStatus: selectedRunView, plan: draft ? draft.plan : null }),
-            h(Timeline, {
+            draft || selectedRunView ? h(PipelineStrip, { runStatus: selectedRunView, plan: draft ? draft.plan : null }) : null,
+            selectedRunId ? h(Timeline, {
               panelRef: timelineRef,
               runStatus: selectedRunView,
               loading: Boolean(runInfo.loading && (!runInfo.data || runInfo.runId === selectedRunId)),
@@ -6307,7 +6388,7 @@
               onCancel: handleCancelRun,
               onCopy: handleCopy,
               onExpand: function () { if (selectedRunId) ensureManifest(selectedRunId, false) },
-            }),
+            }) : null,
             nextWish.directions.length ? h('div', { className: 'bf-next' },
               h('div', { className: 'bf-next-head' },
                 h('span', { className: 'bf-panel-title' }, h(Icon, { name: 'flow', size: 12 }), '顺着这次结果，继续许愿'),
@@ -6354,6 +6435,11 @@
               },
             }))),
 
+        h(TrashModal, {
+          open: trashOpen, api: api,
+          onClose: function () { setTrashOpen(false) },
+          onChanged: function () { loadRuns() },
+        }),
         h(DatasetPickerModal, {
           open: picker.open,
           options: picker.options,
