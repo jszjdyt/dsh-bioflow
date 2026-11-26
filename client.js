@@ -2572,7 +2572,7 @@
     // ----------------------------------------------------------------------
     function PaperFigurePanel(props) {
       var api = props.api
-      var modeState = useState('pmid')
+      var modeState = useState(props.defaultMode || 'pmid')
       var mode = modeState[0]
       var setMode = modeState[1]
       var inputState = useState('')
@@ -2581,7 +2581,7 @@
       var captionState = useState('')
       var caption = captionState[0]
       var setCaption = captionState[1]
-      var resultState = useState({ loading: false, error: null, data: null })
+      var resultState = useState(props.initialResult ? { loading: false, error: null, data: props.initialResult } : { loading: false, error: null, data: null })
       var result = resultState[0]
       var setResult = resultState[1]
 
@@ -6778,6 +6778,7 @@
           FiguresGrid: FiguresGrid,
           SidebarIcon: SidebarIcon,
           PaperFigurePanel: PaperFigurePanel,
+          GuidedPage: GuidedPage,
         },
       }),
     }
