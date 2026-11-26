@@ -1861,7 +1861,7 @@
     '@media (max-width:760px){.bf-field{grid-template-columns:minmax(0,1fr)}.bf-top{padding:8px 10px}.bf-body{padding:8px;gap:8px}.bf-env{max-width:80vw}}',
   ]
 
-  var BF_UI_BUILD = 'UI 0.2.6 · 2026-11-26 16:45'
+  var BF_UI_BUILD = 'UI 0.2.7 · 2026-11-26 16:50'
 
   var CSS_TEXT = CSS_LINES.join('\n')
 
@@ -2793,20 +2793,28 @@
           })) : null)
     }
 
-    /** 固定整屏弹层：内联样式兜底，避免 CSS 级联/滚动容器把弹窗压扁或吃掉点击。 */
+    /** 固定整屏弹层：Esc 关闭、点背景关闭、尺寸不超视口、内容自身滚动。 */
     function Overlay(props) {
+      React.useEffect(function () {
+        if (typeof window === 'undefined' || !window.addEventListener) return undefined
+        function onKey(event) { if (event && (event.key === 'Escape' || event.keyCode === 27)) { if (props.onClose) props.onClose(event) } }
+        window.addEventListener('keydown', onKey, true)
+        return function () { window.removeEventListener('keydown', onKey, true) }
+      }, [])
       return h('div', {
         role: 'dialog', 'aria-modal': 'true', 'aria-label': asText(props.label, '弹窗'),
         style: {
           position: 'fixed', inset: 0, zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '24px',
+          alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box',
           background: 'rgba(7,26,41,.45)', backdropFilter: 'blur(6px)',
         },
         onClick: function (event) { if (props.onClose) props.onClose(event) },
       }, h('div', {
         style: {
-          width: 'min(860px, 100%)', maxHeight: 'calc(100vh - 48px)', overflow: 'auto',
-          resize: 'both', minWidth: '420px', minHeight: '300px',
+          width: 'min(860px, calc(100vw - 32px))', maxWidth: 'calc(100vw - 32px)',
+          height: 'auto', maxHeight: 'calc(100vh - 32px)', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+          resize: 'both', minWidth: '420px', minHeight: '260px',
           background: '#fff', borderRadius: '18px', border: '1px solid var(--bf-line)',
           boxShadow: '0 40px 90px -50px rgba(8,60,96,.7)',
         },
@@ -2852,14 +2860,26 @@
             figureOpen ? h(Overlay, {
               label: '照着图来', onClose: function () { setFigureOpen(false) },
             },
-              h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '12px 14px', borderBottom: '1px solid var(--bf-line)' } },
-                h('span', { style: { fontSize: '13px', fontWeight: 600 } }, h(Icon, { name: 'image', size: 13 }), ' 照着图来'),
-                h('div', { className: 'bf-chips', style: { marginLeft: '6px' } },
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '10px 14px', borderBottom: '1px solid var(--bf-line)', position: 'sticky', top: 0, background: '#fff', zIndex: 2 } },
+                h('span', { style: { fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' } }, '照着图来'),
+                h('div', { className: 'bf-chips', style: { marginLeft: '4px' } },
                   h('button', { type: 'button', className: 'bf-chip' + (figureMode === 'presets' ? ' bf-chip-on' : ''), onClick: function () { setFigureMode('presets') } }, '常见图型'),
-                  h('button', { type: 'button', className: 'bf-chip' + (figureMode === 'paper' ? ' bf-chip-on' : ''), onClick: function () { setFigureMode('paper') } }, '从论文拆图')),
+                  h('button', { type: 'button', className: 'bf-chip' + (figureMode === 'paper' ? ' bf-chip-on' : ''), onClick: function () { setFigureMode('paper') } }, '上传论文 PDF/图片')),
                 h('div', { style: { flex: '1 1 auto' } }),
-                h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: function () { setFigureOpen(false) } }, h(Icon, { name: 'close', size: 11 }), '关闭')),
-              h('div', { style: { padding: '12px 14px' } },
+                h('button', {
+                  type: 'button', className: 'bf-btn bf-btn-sm',
+                  onClick: function () { setFigureOpen(false) }, title: '关闭（Esc）',
+                }, h(Icon, { name: 'close', size: 12 }), '关闭 Esc')),
+              h('div', { style: { padding: '10px 14px 4px' } },
+                h('div', { className: 'bf-composer-hint', style: { marginBottom: '8px' } },
+                  '怎么用：① 想好要哪类图 → 点「用这个图型」；② 论文里有现成图 → 点「上传论文 PDF/图片」，拖 PDF、选文件或 ⌘V 粘贴截图 → 多模态识别 → 点「按这张图许愿」。'),
+                figureMode === 'presets'
+                  ? h('button', {
+                    type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', style: { marginBottom: '8px' },
+                    onClick: function () { setFigureMode('paper') },
+                  }, h(Icon, { name: 'upload', size: 12 }), '上传论文 PDF / 图片')
+                  : null),
+              h('div', { style: { padding: '4px 14px 10px', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 } },
                 figureMode === 'presets'
                   ? h('div', { className: 'bf-joint-list' }, FIGURE_PRESETS.map(function (preset) {
                     function pick() {
@@ -2868,27 +2888,25 @@
                       else if (typeof props.onTextChange === 'function') props.onTextChange(text)
                       setFigureOpen(false)
                     }
-                    return h('div', { key: preset.id, className: 'bf-clinical-hit', style: { cursor: 'pointer' }, onClick: pick },
-                      h('div', { className: 'bf-clinical-hit-title' }, preset.label),
+                    return h('div', { key: preset.id, className: 'bf-clinical-hit' },
+                      h('div', { className: 'bf-clinical-hit-title', style: { whiteSpace: 'normal' } }, preset.label),
                       h('div', { className: 'bf-joint-actions' },
-                        h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: function (event) { if (event && event.stopPropagation) event.stopPropagation(); pick() } }, '用这个图型'),
-                        h('span', { className: 'bf-composer-hint' }, '点击后自动填进许愿框')))
-                  }).concat([
-                    h('div', { key: 'upload-paper', className: 'bf-clinical-hit', style: { cursor: 'pointer' }, onClick: function () { setFigureMode('paper') } },
-                      h('div', { className: 'bf-clinical-hit-title' }, '没有现成的图？上传论文 PDF / 截图'),
-                      h('div', { className: 'bf-clinical-hit-meta bf-muted' }, '拖 PDF 或图片进来，多模态识别图型后直接给复现许愿'),
-                      h('div', { className: 'bf-joint-actions' },
-                        h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: function (event) { if (event && event.stopPropagation) event.stopPropagation(); setFigureMode('paper') } }, '去上传 PDF / 图片')))
-                  ]))
+                        h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-primary', onClick: pick }, '用这个图型'),
+                        h('span', { className: 'bf-composer-hint' }, '点了就填进许愿框并关闭')))
+                  }))
                   : h(PaperFigurePanel, {
                     api: props.api,
                     defaultMode: 'pdf',
                     onCompose: props.onCompose,
                     onClose: function () { setFigureOpen(false) },
                   })),
-              h('div', { style: { padding: '8px 14px', borderTop: '1px solid var(--bf-line)', fontSize: '11px', color: 'var(--bf-ink-2)' } },
-                BF_UI_BUILD + ' · 看不到「从论文拆图」页签说明页面还在旧缓存，请完全退出 DSH 再重开')
-            ) : null,
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderTop: '1px solid var(--bf-line)', background: '#fff', position: 'sticky', bottom: 0, zIndex: 2 } },
+                figureMode === 'paper'
+                  ? h('button', { type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost', onClick: function () { setFigureMode('presets') } }, '← 返回常见图型')
+                  : h('span', { className: 'bf-composer-hint' }, '论文里有图？点右上「上传论文 PDF/图片」'),
+                h('div', { style: { flex: '1 1 auto' } }),
+                h('span', { className: 'bf-composer-hint' }, BF_UI_BUILD),
+                h('button', { type: 'button', className: 'bf-btn bf-btn-sm', onClick: function () { setFigureOpen(false) } }, '关闭'))) : null,
             hasConversation ? null : h('button', {
               type: 'button', className: 'bf-btn bf-btn-sm bf-btn-ghost bf-examples-toggle',
               onClick: function () { setShowExamples(!showExamples) },
