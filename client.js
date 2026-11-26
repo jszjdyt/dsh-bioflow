@@ -2534,10 +2534,11 @@
             ? h('div', { className: 'bf-muted', style: { padding: '2px 2px 4px' } }, '暂无历史 run；提交计划后会出现在这里。')
             : h('div', { className: 'bf-runlist' }, runs.map(function (run) {
               var selected = run.runId === props.selectedRunId
-              return h('button', {
-                key: run.runId, type: 'button',
+              return h('div', {
+                key: run.runId, role: 'button', tabIndex: 0,
                 className: 'bf-runitem' + (selected ? ' bf-runitem-on' : ''),
                 onClick: function () { props.onSelect(run.runId) },
+                onKeyDown: function (event) { if (event && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); props.onSelect(run.runId) } },
                 title: asText(run.runId, ''),
               },
                 h('div', { className: 'bf-runitem-main' },
