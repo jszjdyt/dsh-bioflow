@@ -57,5 +57,26 @@
   "engines": {
     "node": ">=18"
   },
-  "displayName": "许愿式生物信息全自动分析平台"
+  "displayName": "许愿式生物信息全自动分析平台",
+  "ci": {
+    "node": [
+      "test/export.test.mjs",
+      "test/harmonize_merge.test.mjs",
+      "test/paperfig.test.mjs",
+      "test/pdf_pipeline.test.mjs",
+      "test/plan.test.mjs",
+      "test/pubmed.test.mjs",
+      "test/register.test.mjs",
+      "test/review_p0.test.mjs",
+      "test/rocrate.test.mjs",
+      "test/stats_contract.test.mjs",
+      "test/stats_contract_ui.test.mjs",
+      "test/store.test.mjs",
+      "test/templates.test.mjs",
+      "test/tool.test.mjs",
+      "test/ui_audit.test.mjs",
+      "test/vision_action.test.mjs"
+    ],
+    "python": []
+  }
 }
