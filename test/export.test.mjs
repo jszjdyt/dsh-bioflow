@@ -12,6 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import * as impl from '../lib/impl.mjs'
+import { validateRoCrate } from '../lib/rocrate.mjs'
 
 const MATRIX = [
   'gene,S1,S2,S3,S4',
@@ -204,13 +205,24 @@ test('20) 导出包里的文件哈希与磁盘一致（且是完整结果包）'
     assert.equal(fs.existsSync(path.join(bundleDir, relative)), true, `导出包应包含 ${relative}`)
   }
   // 包内文件必须覆盖 run 目录全部交付文件（manifest.json 也在内；允许包内额外附带 export.json 元数据）
-  const bundleFiles = walkFiles(bundleDir).filter((name) => name !== 'export.json')
+  // 导出包现在额外带 RO-Crate 元数据与预览页（契约扩展，不只是元数据文件）
+  const RO_CRATE_FILES = ['export.json', 'ro-crate-metadata.json', 'ro-crate-preview.html']
+  const bundleFiles = walkFiles(bundleDir).filter((name) => !RO_CRATE_FILES.includes(name))
   const runFiles = walkFiles(context.runDir)
   for (const relative of runFiles) {
     assert.ok(bundleFiles.includes(relative), `导出包缺文件：${relative}`)
   }
-  assert.ok(bundleFiles.every((relative) => runFiles.includes(relative) || relative === 'export.json'),
+  assert.ok(bundleFiles.every((relative) => runFiles.includes(relative)),
     '导出包不应夹带 run 目录之外的未知文件')
+
+  // RO-Crate 集成：包内实体图必须可校验，并与导出记录一致
+  const cratePath = path.join(bundleDir, 'ro-crate-metadata.json')
+  assert.equal(fs.existsSync(cratePath), true, '导出包必须包含 ro-crate-metadata.json')
+  const crate = JSON.parse(fs.readFileSync(cratePath, 'utf8'))
+  const crateCheck = validateRoCrate(crate)
+  assert.deepEqual(crateCheck.issues, [], `RO-Crate 结构校验应通过：${JSON.stringify(crateCheck.issues)}`)
+  assert.equal(exportRecord.ro_crate && exportRecord.ro_crate.valid, true, 'export.json 应记录 RO-Crate 校验结果')
+  assert.equal(fs.existsSync(path.join(bundleDir, 'ro-crate-preview.html')), true, '导出包应包含人读预览页')
 })
 
 test('21) 重启（新 runtime/store 实例）后仍能按 run_id 查到导出记录', async (t) => {

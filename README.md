@@ -94,6 +94,32 @@ run 成功 ≠ 结论可引用。「这次到底用了什么统计设定」以�
 
 ---
 
+## RO-Crate 导出（给外部工具消费）
+
+`action=export` 有 `out_path` 时，结果包里会多两样东西：
+
+- `ro-crate-metadata.json`：RO-Crate 1.1 + **Workflow Run Crate / Process profile 0.4** 的实体图；
+- `ro-crate-preview.html`：人读预览页（实体表 + 元数据链接）。
+
+映射关系：
+
+| RO-Crate 实体 | 来自 manifest 的什么 |
+|---|---|
+| root `Dataset`（`./`） | run_id、template、dataset 摘要、`content_hash`、`manifest_sha256`、zero_significant |
+| `CreateAction`（`#run`、`#step-*`） | 每一步的 plugin/action、起止时间、`CompletedActionStatus` / `FailedActionStatus`、error |
+| `SoftwareApplication`（`#bioflow`、`#plugin-*`） | `environment.bioflow_version` / `environment.plugins[*].version` |
+| `File` | 每个导出文件的 `contentSize` + `sha256` + `encodingFormat` |
+| `Dataset`（`#dataset`） | 输入数据来源（dataset_id/assay/species/scale + 输入文件哈希），**不把未随包导出的输入伪装成包内文件** |
+| `PropertyValue`（`#param-*`） | 冻结计划里的对比方向、FDR、seed 等 |
+
+结构校验在导出时自动跑（`validateRoCrate`），结果写进 `export.json` 的 `ro_crate.valid` 与返回体；
+导出包的 `content_hash` 仍只由 run 产物决定，**不因 RO-Crate 文件而改变**（同一 run 反复导出同哈希）。
+
+> 实现说明：RO-Crate 的实体形状按 1.1 规范与 Process Run profile 独立实现；Galaxy 的同类导出是 MIT，
+> 我们只对照其公开的实体约定，没有复制代码。适配层在 `lib/rocrate.mjs`，测试在 `test/rocrate.test.mjs`。
+
+---
+
 ## 六个工作台 = 六个模板
 
 模板把「哪个工作台、什么数据、跑哪几步、哪些闸门必须过」固化下来；具体清单以 `bioflow action=templates` 的返回为准（模板版本随计划一起冻结）。
