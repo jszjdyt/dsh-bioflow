@@ -67,6 +67,33 @@
 
 ---
 
+## 统计口径（stats contract）
+
+run 成功 ≠ 结论可引用。「这次到底用了什么统计设定」以前散落在 `params`、`design.tsv`、`methods.md`、`environment` 里，人和 agent 都很难一句话答出来。现在把它收成一份结构化契约：
+
+| 阶段 | 出现在哪 | 给谁用 |
+|---|---|---|
+| **提交前** | `plan` / `ask` 返回 `stats_preview`；计划卡里显示「提交前口径预览」 | 让用户在花算力**之前**就看到：对比方向、检验、校正族与 alpha、每组样本/供体数、尺度是否已验证——不对就改字段重算 draft |
+| **run 后** | `run_status` 返回 `stats_contract`；右栏「口径」页签、时间线顶部徽章 | 回查与引用：任何数字都能连带它的统计口径一起被引用/审计 |
+
+契约字段（`schema=bioflow.stats_contract/1`）：
+
+- `contrast`：case / control / 方向（`case - control`）/ 效应量口径（仅差异类计划声明）；
+- `design`：每组 `n_samples` / `n_donors`、最小每组 n、配对列、协变量、实际公式；
+- `inference`：每个步骤声明的检验方法、FDR 方法/alpha/检验族大小/来源（计划显式 vs 引擎默认）；
+- `data`：数据集 revision、assay、物种、平台、**尺度与是否已验证**；
+- `evidence`：claim 总数与 measured / descriptive / model_prediction 分布、是否零显著；
+- `identity`：`content_hash`、`manifest_sha256`、run 目录、seed（产物按内容锁定）；
+- `environment`：bioflow / node / 平台 / 各插件版本；
+- `caveats`：**引用前必须处理的项**（见下）；
+- `reproduce`：可直接复制的回查/复现命令。
+
+`caveats` 是这套东西的重点，`ok_to_cite` 由它决定：尺度未验证（推断应降级为描述）、声明配对但没记录配对列、每组/每供体 n<2、有协变量却没记录公式、含 `model_prediction`（假说不是实验结论）、缺 `content_hash`、证据索引被截断（`rows_indexed < rows_total`）、有步骤失败。**取不到的字段一律写 `null` 并进 caveats，不补默认值、不猜方法名。**
+
+> 命令：`node bin/bioflow.mjs run-status --run-id=<id> --json | jq .run.stats_contract`
+
+---
+
 ## 六个工作台 = 六个模板
 
 模板把「哪个工作台、什么数据、跑哪几步、哪些闸门必须过」固化下来；具体清单以 `bioflow action=templates` 的返回为准（模板版本随计划一起冻结）。
